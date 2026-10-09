@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     KEYAUTH_APP_SECRET: SecretStr | None = None
     KEYAUTH_APP_NAME: str | None = None
 
+    # Anti-tampering configuration
+    ANTI_TAMPER_ENABLED: bool = True
+    ANTI_TAMPER_ENFORCEMENT_MODE: str = "monitor"
+    ANTI_TAMPER_AUTO_RESTRICT_THRESHOLD: int = 5
+    ANTI_TAMPER_BAN_THRESHOLD: int = 10
+    ANTI_TAMPER_RESTRICTION_HOURS: int = 24
+    ANTI_TAMPER_RETENTION_DAYS: int = 30
+
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_origins(cls, value: object) -> object:
@@ -95,6 +103,14 @@ class Settings(BaseSettings):
             raise ValueError("must be greater than zero")
         return value
 
+    @field_validator("ANTI_TAMPER_ENFORCEMENT_MODE")
+    @classmethod
+    def _enforcement_mode(cls, value: str) -> str:
+        allowed = {"monitor", "restrict", "enforce"}
+        if value not in allowed:
+            raise ValueError(f"ANTI_TAMPER_ENFORCEMENT_MODE must be one of {sorted(allowed)}")
+        return value
+
     @field_validator(
         "MAX_REQUEST_BODY_BYTES",
         "RATE_LIMIT_AUTH_PER_MINUTE",
@@ -104,6 +120,10 @@ class Settings(BaseSettings):
         "BCRYPT_TIME_COST",
         "BCRYPT_MEMORY_COST",
         "BCRYPT_PARALLELISM",
+        "ANTI_TAMPER_AUTO_RESTRICT_THRESHOLD",
+        "ANTI_TAMPER_BAN_THRESHOLD",
+        "ANTI_TAMPER_RESTRICTION_HOURS",
+        "ANTI_TAMPER_RETENTION_DAYS",
     )
     @classmethod
     def _non_negative(cls, value: int) -> int:

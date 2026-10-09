@@ -5,14 +5,14 @@ so the app secret never touches the browser.
 """
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, Request
 
 from app.config import Settings
-from app.deps import iso, settings_dep, unix
+from app.deps import settings_dep
+from app.errors import AppError, ErrorCode
 from app.schemas import ActivateRequest, SuccessResponse, ValidateRequest, success
 from app.services import keyauth as keyauth_svc
+from app.services.keyauth import KeyAuthError
 
 router = APIRouter(prefix="/v1/keyauth", tags=["keyauth"])
 
@@ -29,16 +29,17 @@ async def keyauth_activate(
 
     The app secret is used entirely server-side; it is never sent to the client.
     """
-    result = await keyauth_svc.validate_license_key(
-        settings,
-        raw_key=payload.key,
-        hwid=payload.hwid,
-    )
-    data: dict[str, Any] = result.to_dict()
-    if result.success:
-        data["expires_at"] = iso(result.data.get("session_expires_at")) if result.data else None
-        data["exp"] = unix(result.data.get("session_expires_at")) if result.data else None
-    return success(data)
+    try:
+        result = await keyauth_svc.validate_license_key(
+            settings,
+            raw_key=payload.key,
+            hwid=payload.hwid,
+        )
+    except KeyAuthError as exc:
+        raise AppError(ErrorCode.SERVICE_MAINTENANCE, "KeyAuth validation failed") from exc
+    except Exception as exc:
+        raise AppError(ErrorCode.INTERNAL_ERROR, "KeyAuth validation failed") from exc
+    return success(result.to_dict())
 
 
 @router.post("/session/validate")
@@ -52,7 +53,12 @@ async def keyauth_validate_session(
     Re-initializes with KeyAuth to confirm the service is reachable and the
     app configuration is valid.
     """
-    result = await keyauth_svc.validate_session(settings)
+    try:
+        result = await keyauth_svc.validate_session(settings)
+    except KeyAuthError as exc:
+        raise AppError(ErrorCode.SERVICE_MAINTENANCE, "KeyAuth session validation failed") from exc
+    except Exception as exc:
+        raise AppError(ErrorCode.INTERNAL_ERROR, "KeyAuth session validation failed") from exc
     return success(result.to_dict())
 
 
@@ -62,5 +68,10 @@ async def keyauth_heartbeat(
     settings: Settings = _settings_dep,
 ) -> SuccessResponse:
     """Check whether the KeyAuth service is reachable."""
-    result = await keyauth_svc.heartbeat(settings)
+    try:
+        result = await keyauth_svc.heartbeat(settings)
+    except KeyAuthError as exc:
+        raise AppError(ErrorCode.SERVICE_MAINTENANCE, "KeyAuth service check failed") from exc
+    except Exception as exc:
+        raise AppError(ErrorCode.INTERNAL_ERROR, "KeyAuth service check failed") from exc
     return success(result.to_dict())
