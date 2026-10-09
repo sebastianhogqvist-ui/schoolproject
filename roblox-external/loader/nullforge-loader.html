@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NULLFORGE</title>
+<style>
+  :root{
+    --bg:#000000;
+    --accent:#8b7bff;
+    --accent2:#ff5db1;
+    --accent3:#5de4ff;
+    --text:#ffffff;
+    --dim:#8a8a9a;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;font-family:'JetBrains Mono',ui-monospace,Consolas,monospace;}
+  #stage{position:fixed;inset:0;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  #vignette{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%);
+    animation:vigPulse 2.6s ease-in-out infinite;}
+  @keyframes vigPulse{0%,100%{opacity:.85}50%{opacity:1}}
+
+  #center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;}
+
+  .glowWrap{position:relative;width:180px;height:180px;display:flex;align-items:center;justify-content:center;
+    animation:hueCycle 6s linear infinite, pulseGlow 2.2s ease-in-out infinite;}
+  @keyframes hueCycle{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+  @keyframes pulseGlow{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+  .glowWrap img{width:100%;height:100%;filter:drop-shadow(0 0 18px var(--accent)) drop-shadow(0 0 36px var(--accent));}
+
+  #ring{position:absolute;inset:-24px;border-radius:50%;
+    border:2px solid transparent;border-top-color:var(--accent);border-right-color:var(--accent2);
+    animation:spin 2.4s linear infinite, hueCycle 6s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  #wordmark{font-size:34px;font-weight:700;letter-spacing:10px;color:var(--text);
+    filter:drop-shadow(0 0 10px var(--accent)) drop-shadow(0 0 22px var(--accent));
+    animation:hueCycle 6s linear infinite, pulseGlow 2.2s ease-in-out infinite;}
+
+  .glitching .glowWrap img, .glitching #wordmark{animation-play-state:paused;}
+  .glitching #wordmark{position:relative;}
+  .glitchLayer{position:absolute;inset:0;mix-blend-mode:screen;opacity:0;}
+  .glitching .glitchLayer{opacity:1;}
+  .glitchR{color:#ff2b5e;transform:translate(0,0);}
+  .glitchG{color:#2bffa3;transform:translate(0,0);}
+  .glitchB{color:#2b8cff;transform:translate(0,0);}
+  .glitching .glitchR{transform:translate(3px,-1px);}
+  .glitching .glitchG{transform:translate(-3px,1px);}
+  .glitching .glitchB{transform:translate(1px,2px);}
+
+  #barTrack{width:280px;height:6px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden;position:relative;}
+  #barFill{height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3));
+    background-size:200% 100%;animation:barShift 3s linear infinite;position:relative;}
+  @keyframes barShift{0%{background-position:0% 0}100%{background-position:200% 0}}
+  #barFill::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);
+    width:40%;animation:sheen 1.4s linear infinite;}
+  @keyframes sheen{0%{transform:translateX(-120%)}110%{transform:translateX(320%)}}
+
+  #pct{color:var(--text);font-size:13px;letter-spacing:3px;opacity:.9;}
+  #status{height:16px;color:var(--dim);font-size:11px;letter-spacing:2px;text-transform:uppercase;transition:opacity .25s ease;}
+
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:10;}
+
+  #purchaseBtn{margin-top:4px;background:transparent;color:var(--dim);border:1px solid rgba(255,255,255,0.14);
+    border-radius:8px;padding:8px 16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;
+    cursor:pointer;font-family:inherit;transition:border-color .2s ease,color .2s ease;}
+  #purchaseBtn:hover{border-color:var(--accent);color:#fff;}
+
+  /* ---------- key system (static shell — not wired up yet) ---------- */
+  #keysystem{position:fixed;inset:0;background:#0b0c10;opacity:0;pointer-events:none;
+    transition:opacity .6s ease;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;}
+  #keysystem.show{opacity:1;pointer-events:auto;}
+  .ksWrap{display:flex;gap:18px;max-width:980px;width:100%;flex-wrap:wrap;justify-content:center;}
+  .ksPanel{background:#12131a;border:1px solid rgba(255,255,255,0.06);border-radius:14px;flex:1;min-width:320px;overflow:hidden;}
+  .ksTitlebar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .ksDot{width:10px;height:10px;border-radius:50%;}
+  .ksTitlebar span.label{margin-left:auto;color:var(--dim);font-size:11px;letter-spacing:1px;}
+  .ksBody{padding:16px;}
+  .ksHeader{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .ksHeader img{width:30px;height:30px;filter:drop-shadow(0 0 6px var(--accent));}
+  .ksHeader .name{font-weight:700;letter-spacing:2px;font-size:14px;}
+  .ksHeader .tag{color:var(--dim);font-size:10px;}
+  .ksPills{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+  .pill{font-size:10px;padding:4px 8px;border:1px solid rgba(255,255,255,0.1);border-radius:999px;color:var(--dim);display:flex;align-items:center;gap:5px;}
+  .dotGreen{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e;}
+  .ksCards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+  .ksCard{background:#0f1016;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;}
+  .ksCard .lbl{color:var(--dim);font-size:10px;letter-spacing:1px;}
+  .ksCard .val{font-size:18px;font-weight:700;margin-top:2px;}
+  .ksInputRow{display:flex;gap:8px;margin-bottom:12px;}
+  .ksInput{flex:1;background:#0f1016;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;padding:9px 10px;font-family:inherit;font-size:12px;}
+  .ksBtn{background:var(--accent);border:none;border-radius:8px;color:#0b0c10;font-weight:700;font-size:11px;padding:9px 12px;cursor:default;font-family:inherit;}
+  .ksBtn.secondary{background:transparent;color:var(--dim);border:1px solid rgba(255,255,255,0.12);cursor:default;}
+  .ksLog{background:#0a0a0e;border-radius:8px;height:110px;overflow-y:auto;padding:8px 10px;font-size:10.5px;line-height:1.7;color:var(--dim);}
+  .ksLog .ok{color:#22c55e;}
+  .ksRow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:11px;}
+  .ksRow:last-child{border-bottom:none;}
+  #replayBtn{position:fixed;top:14px;right:14px;z-index:5;background:rgba(255,255,255,0.06);color:var(--dim);
+    border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 12px;font-size:11px;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="snow"></canvas>
+  <div id="vignette"></div>
+
+  <div id="center">
+    <div class="glowWrap" id="glowWrap">
+      <div id="ring"></div>
+      <img src="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNjAwIDYwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48ZmlsdGVyIGlkPSJnbG93IiB4PSItNTAlIiB5PSItNTAlIiB3aWR0aD0iMjAwJSIgaGVpZ2h0PSIyMDAlIj48ZmVHYXVzc2lhbUJsdXIgc3RkRGV2aWF0aW9uPSIxMCIgcmVzdWx0PSJibHVyIi8+PGZlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJibHVyIi8+PGZlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9mZU1lcmdlPjwvZmlsdGVyPjxsaW5lYXJHcmFkaWVudCBpZD0iZmFkZSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2ZmZmZmZiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzhiN2JmZiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MDAiIGhlaWdodD0iNjAwIiBmaWxsPSJub25lIi8+PGcgZmlsdGVyPSJ1cmwoI2dsb3cpIj48cGF0aCBmaWxsPSJ1cmwoI2ZhZGUpIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0zMDAsODAgTDQ2MCwxNjAgTDQ2MCwzNDAgTDMwMCw1MjAgTDE0MCwzNDAgTDE0MCwxNjAgWiBNMzAwLDE0MCBMNDEwLDE5NSBMNDEwLDMzMCBMMzAwLDQ1NSBMMTkwLDMzMCBMMTkwLDE5NSBaIi8+PHBvbHlnb24gcG9pbnRzPSIzMDAsMjU1IDMyNSwzMDAgMzAwLDM0NSAyNzUsMzAwIiBmaWxsPSIjZmZmZmZmIi8+PC9nPjwvc3ZnPg==" alt="Nullforge logo">
+    </div>
+
+    <div id="wordTarget">
+      <div id="wordmark" style="position:relative;">NULLFORGE
+        <span class="glitchLayer glitchR" style="position:absolute;left:0;top:0;">NULLFORGE</span>
+        <span class="glitchLayer glitchG" style="position:absolute;left:0;top:0;">NULLFORGE</span>
+        <span class="glitchLayer glitchB" style="position:absolute;left:0;top:0;">NULLFORGE</span>
+      </div>
+    </div>
+
+    <div id="barTrack"><div id="barFill"></div></div>
+    <div id="pct">0%</div>
+    <div id="status">initializing core</div>
+  </div>
+</div>
+<div id="flash"></div>
+<button id="replayBtn" onclick="replayIntro()">↻ replay intro</button>
+
+<div id="keysystem">
+  <div class="ksWrap">
+    <div class="ksPanel">
+      <div class="ksTitlebar">
+        <div class="ksDot" style="background:#ff5f57"></div>
+        <div class="ksDot" style="background:#febc2e"></div>
+        <div class="ksDot" style="background:#28c840"></div>
+        <span class="label">key / gateway</span>
+      </div>
+      <div class="ksBody">
+        <div class="ksHeader">
+          <img src="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNjAwIDYwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48ZmlsdGVyIGlkPSJnbG93MiIgeD0iLTUwJSIgeT0iLTUwJSIgd2lkdGg9IjIwMCUiIGhlaWdodD0iMjAwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMTAiIHJlc3VsdD0iYmx1ciIvPjxmZU1lcmdlPjxmZU1lcmdlTm9kZSBpbj0iYmx1ciIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48L2ZpbHRlcj48bGluZWFyR3JhZGllbnQgaWQ9ImZhZGUyIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmZmZmZmIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjOGI3YmZmIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PGcgZmlsdGVyPSJ1cmwoI2dsb3cyKSI+PHBhdGggZmlsbD0idXJsKCNmYWRlMikiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTMwMCw4MCBMNDYwLDE2MCBMNDYwLDM0MCBMMzAwLDUyMCBMMTQwLDM0MCBMMTQwLDE2MCBaIE0zMDAsMTQwIEw0MTAsMTk1IEw0MTAsMzMwIEwzMDAsNDU1IEwxOTAsMzMwIEwxOTAsMTk1IFoiLz48cG9seWdvbiBwb2ludHM9IjMwMCwyNTUgMzI1LDMwMCAzMDAsMzQ1IDI3NSwzMDAiIGZpbGw9IiNmZmZmZmYiLz48L2c+PC9zdmc+" alt="">
+          <div>
+            <div class="name">NULLFORGE</div>
+            <div class="tag">verified · secured · yours</div>
+          </div>
+          <div class="ksPills">
+            <div class="pill"><span class="dotGreen"></span>ready</div>
+            <div class="pill">build 1.0.4</div>
+            <div class="pill">sess ——</div>
+          </div>
+        </div>
+
+        <div class="ksCards">
+          <div class="ksCard"><div class="lbl">ATTEMPTS</div><div class="val" id="attemptsVal">0</div></div>
+          <div class="ksCard"><div class="lbl">VALIDATION</div><div class="val" id="validationVal" style="color:var(--dim)">idle</div></div>
+        </div>
+
+        <div class="ksInputRow">
+          <input class="ksInput" id="keyInput" placeholder="enter key..." autocomplete="off" />
+          <button class="ksBtn" id="verifyBtn">Verify key</button>
+          <button class="ksBtn secondary" id="purchaseBtn">Purchase</button>
+        </div>
+
+        <div class="ksLog" id="ksLog">awaiting key activation...</div>
+      </div>
+    </div>
+
+    <div class="ksPanel">
+      <div class="ksTitlebar">
+        <div class="ksDot" style="background:#ff5f57"></div>
+        <div class="ksDot" style="background:#febc2e"></div>
+        <div class="ksDot" style="background:#28c840"></div>
+        <span class="label">key info</span>
+      </div>
+      <div class="ksBody">
+        <div class="ksRow"><span>plan</span><span id="infoPlan" style="color:var(--dim)">—</span></div>
+        <div class="ksRow"><span>devices</span><span id="infoDevices" style="color:var(--dim)">—</span></div>
+        <div class="ksRow"><span>key format</span><span id="infoFormat" style="color:var(--dim)">—</span></div>
+        <div class="ksRow"><span>server reachable</span><span id="infoReachable" style="color:var(--dim)">—</span></div>
+        <div class="ksRow"><span>hwid bound</span><span id="infoHwid" style="color:var(--dim)">—</span></div>
+        <div class="ksRow"><span>status</span><span id="infoStatus" style="color:var(--dim)">waiting for key</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- snow particles ----------
+const snowCv = document.getElementById('snow');
+const sctx = snowCv.getContext('2d');
+let W,H;
+function resize(){
+  W = snowCv.width = bgCv.width = innerWidth;
+  H = snowCv.height = bgCv.height = innerHeight;
+}
+const bgCv = document.getElementById('bg');
+const bctx = bgCv.getContext('2d');
+window.addEventListener('resize', resize);
+
+const snowflakes = [];
+const SNOW_COUNT = 180;
+for(let i=0;i<SNOW_COUNT;i++){
+  snowflakes.push({
+    x: Math.random(), y: Math.random(),
+    r: Math.random()*2.2+0.6,
+    speed: Math.random()*0.00035+0.00015,
+    drift: Math.random()*0.0004-0.0002,
+    phase: Math.random()*Math.PI*2,
+    o: Math.random()*0.5+0.3
+  });
+}
+// parallax back layer
+const backFlakes = [];
+const BACK_COUNT = 40;
+for(let i=0;i<BACK_COUNT;i++){
+  backFlakes.push({
+    x: Math.random(), y: Math.random(),
+    r: Math.random()*4+3,
+    speed: Math.random()*0.00012+0.00005,
+    o: Math.random()*0.18+0.05
+  });
+}
+
+// orbs
+const orbColors = ['#8b7bff','#ff5db1','#5de4ff','#ffd15d'];
+const orbs = [];
+for(let i=0;i<4;i++){
+  orbs.push({
+    cx: Math.random(), cy: Math.random(),
+    rad: Math.random()*0.18+0.14,
+    ang: Math.random()*Math.PI*2,
+    speed: (Math.random()*0.0006+0.0003) * (Math.random()<0.5?1:-1),
+    size: Math.random()*160+140,
+    color: orbColors[i % orbColors.length]
+  });
+}
+
+function drawBack(t){
+  bctx.clearRect(0,0,W,H);
+  // orbs, additive blend
+  bctx.globalCompositeOperation = 'lighter';
+  for(const o of orbs){
+    o.ang += o.speed;
+    const x = (o.cx + Math.cos(o.ang)*o.rad) * W;
+    const y = (o.cy + Math.sin(o.ang)*o.rad) * H;
+    const grad = bctx.createRadialGradient(x,y,0,x,y,o.size);
+    grad.addColorStop(0, o.color + 'aa');
+    grad.addColorStop(1, o.color + '00');
+    bctx.fillStyle = grad;
+    bctx.beginPath();
+    bctx.arc(x,y,o.size,0,Math.PI*2);
+    bctx.fill();
+  }
+  bctx.globalCompositeOperation = 'source-over';
+
+  // far parallax flakes
+  for(const f of backFlakes){
+    f.y += f.speed;
+    if(f.y > 1.05) f.y = -0.05;
+    bctx.beginPath();
+    bctx.fillStyle = `rgba(255,255,255,${f.o})`;
+    bctx.filter = 'blur(2px)';
+    bctx.arc(f.x*W, f.y*H, f.r, 0, Math.PI*2);
+    bctx.fill();
+  }
+  bctx.filter = 'none';
+}
+
+function drawSnow(t){
+  sctx.clearRect(0,0,W,H);
+  for(const s of snowflakes){
+    s.y += s.speed;
+    s.x += Math.sin(t*0.0006 + s.phase) * 0.00004 + s.drift;
+    if(s.y > 1.05){ s.y = -0.05; s.x = Math.random(); }
+    if(s.x > 1.05) s.x = -0.05;
+    if(s.x < -0.05) s.x = 1.05;
+    sctx.beginPath();
+    sctx.fillStyle = `rgba(255,255,255,${s.o})`;
+    sctx.shadowColor = 'rgba(200,190,255,0.9)';
+    sctx.shadowBlur = 4;
+    sctx.arc(s.x*W, s.y*H, s.r, 0, Math.PI*2);
+    sctx.fill();
+  }
+}
+
+resize();
+function loop(t){
+  drawBack(t);
+  drawSnow(t);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- glitch trigger ----------
+const glitchEl = document.getElementById('stage');
+function scheduleGlitch(){
+  const delay = 1800 + Math.random()*2200;
+  setTimeout(()=>{
+    glitchEl.classList.add('glitching');
+    setTimeout(()=>{
+      glitchEl.classList.remove('glitching');
+      scheduleGlitch();
+    }, 120 + Math.random()*60);
+  }, delay);
+}
+scheduleGlitch();
+
+// ---------- progress + status ----------
+const statuses = ["initializing core","verifying session","loading modules","establishing handshake","finalizing"];
+const statusEl = document.getElementById('status');
+const barFill = document.getElementById('barFill');
+const pctEl = document.getElementById('pct');
+const flash = document.getElementById('flash');
+
+let statusIdx = 0;
+function cycleStatus(){
+  statusEl.style.opacity = 0;
+  setTimeout(()=>{
+    statusEl.textContent = statuses[statusIdx % statuses.length];
+    statusIdx++;
+    statusEl.style.opacity = 1;
+  }, 180);
+}
+let statusTimer = setInterval(cycleStatus, 750);
+cycleStatus();
+
+let pct = 0;
+function runProgress(){
+  const iv = setInterval(()=>{
+    pct += Math.random()*2.2 + 0.6;
+    if(pct >= 100){
+      pct = 100;
+      clearInterval(iv);
+      barFill.style.width = '100%';
+      pctEl.textContent = '100%';
+      setTimeout(onLoadComplete, 300);
+      return;
+    }
+    barFill.style.width = pct + '%';
+    pctEl.textContent = Math.floor(pct) + '%';
+  }, 90);
+}
+runProgress();
+
+function onLoadComplete(){
+  flash.style.transition = 'opacity 80ms ease';
+  flash.style.opacity = '1';
+  setTimeout(()=>{
+    flash.style.opacity = '0';
+    document.getElementById('stage').style.transition = 'opacity .5s ease, transform .5s ease';
+    document.getElementById('stage').style.opacity = '0';
+    document.getElementById('stage').style.transform = 'scale(1.03)';
+    setTimeout(()=>{
+      document.getElementById('stage').style.pointerEvents = 'none';
+      document.getElementById('keysystem').classList.add('show');
+    }, 500);
+  }, 80);
+}
+
+// for previewing the loader again — the key system shell itself is static/not wired up
+function replayIntro(){
+  document.getElementById('keysystem').classList.remove('show');
+  const stage = document.getElementById('stage');
+  stage.style.transition = 'none';
+  stage.style.opacity = '1';
+  stage.style.transform = 'scale(1)';
+  stage.style.pointerEvents = 'auto';
+  pct = 0;
+  statusIdx = 0;
+  barFill.style.width = '0%';
+  pctEl.textContent = '0%';
+  runProgress();
+}
+
+// ---------- key system API wiring ----------
+const API_BASE = '';
+const HEARTBEAT_INTERVAL = 30000;
+
+const keyInput = document.getElementById('keyInput');
+const verifyBtn = document.getElementById('verifyBtn');
+const purchaseBtn = document.getElementById('purchaseBtn');
+const ksLog = document.getElementById('ksLog');
+const attemptsVal = document.getElementById('attemptsVal');
+const validationVal = document.getElementById('validationVal');
+const infoPlan = document.getElementById('infoPlan');
+const infoDevices = document.getElementById('infoDevices');
+const infoFormat = document.getElementById('infoFormat');
+const infoReachable = document.getElementById('infoReachable');
+const infoHwid = document.getElementById('infoHwid');
+const infoStatus = document.getElementById('infoStatus');
+
+let attempts = 0;
+let sessionId = null;
+let sessionValid = false;
+
+function log(message, isOk){
+  const ts = new Date().toISOString();
+  const prefix = isOk ? '[OK] ' : '[ERROR] ';
+  ksLog.innerHTML += `<span class="${isOk ? 'ok' : ''}">${prefix}${ts} - ${message}</span><br>`;
+  ksLog.scrollTop = ksLog.scrollHeight;
+}
+
+function updateAttempts(){
+  attemptsVal.textContent = attempts;
+}
+
+function updateValidation(state){
+  validationVal.textContent = state;
+  if(state === 'valid'){
+    validationVal.style.color = '#22c55e';
+  } else if(state === 'invalid'){
+    validationVal.style.color = '#ff2b5e';
+  } else {
+    validationVal.style.color = 'var(--dim)';
+  }
+}
+
+function updateKeyInfo(data){
+  if(data && data.keyInfo){
+    const ki = data.keyInfo;
+    infoPlan.textContent = ki.plan || '—';
+    infoDevices.textContent = ki.devices != null ? ki.devices : '—';
+    infoFormat.textContent = ki.format || '—';
+    infoHwid.textContent = ki.hwid || '—';
+    infoStatus.textContent = ki.status || '—';
+  }
+}
+
+function setReachable(state){
+  if(state === 'yes'){
+    infoReachable.textContent = 'yes';
+    infoReachable.style.color = '#22c55e';
+  } else if(state === 'no'){
+    infoReachable.textContent = 'no';
+    infoReachable.style.color = '#ff2b5e';
+  } else {
+    infoReachable.textContent = '—';
+    infoReachable.style.color = 'var(--dim)';
+  }
+}
+
+async function apiCall(endpoint, data){
+  try{
+    const resp = await fetch(API_BASE + endpoint, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: data ? JSON.stringify(data) : undefined
+    });
+    const result = await resp.json().catch(() => null);
+    if(!resp.ok){
+      throw {status: resp.status, message: result?.error || resp.statusText, data: result};
+    }
+    return result;
+  } catch(err){
+    throw err;
+  }
+}
+
+async function activateKey(){
+  const key = keyInput.value.trim();
+  if(!key){
+    log('Please enter a key', false);
+    return;
+  }
+  verifyBtn.disabled = true;
+  keyInput.disabled = true;
+  attempts++;
+  updateAttempts();
+  log(`Verifying key: ${key}`, true);
+  try{
+    const result = await apiCall('/v1/licenses/activate', {key: key});
+    if(result.success){
+      log('Key activated successfully', true);
+      sessionValid = true;
+      updateValidation('valid');
+      infoStatus.textContent = 'activated';
+      if(result.sessionId){
+        sessionId = result.sessionId;
+      }
+      if(result.keyInfo){
+        updateKeyInfo(result);
+      }
+    } else {
+      attempts++;
+      updateAttempts();
+      log(result.message || 'Key verification failed', false);
+      updateValidation('invalid');
+      infoStatus.textContent = result.message || 'verification failed';
+    }
+  } catch(err){
+    log(`Error: ${err.message || 'request failed'}`, false);
+    updateValidation('invalid');
+  } finally{
+    verifyBtn.disabled = false;
+    keyInput.disabled = false;
+    keyInput.value = '';
+    keyInput.focus();
+  }
+}
+
+async function validateSession(){
+  updateValidation('checking');
+  try{
+    const result = await apiCall('/v1/sessions/validate', {});
+    if(result && result.valid){
+      sessionValid = true;
+      sessionId = result.sessionId || sessionId;
+      log('Session is valid', true);
+      updateValidation('valid');
+      infoStatus.textContent = 'session active';
+      setReachable('yes');
+      if(result.keyInfo){
+        updateKeyInfo(result);
+      }
+    } else {
+      sessionValid = false;
+      log('Session is invalid or expired', false);
+      updateValidation('invalid');
+      infoStatus.textContent = 'session expired';
+      setReachable('yes');
+    }
+  } catch(err){
+    log(`Session validation error: ${err.message || 'server unreachable'}`, false);
+    updateValidation('invalid');
+    setReachable('no');
+  }
+}
+
+async function logoutSession(){
+  try{
+    await apiCall('/v1/sessions/logout', {});
+    sessionValid = false;
+    sessionId = null;
+    log('Logged out successfully', true);
+    updateValidation('idle');
+    infoStatus.textContent = 'logged out';
+  } catch(err){
+    log(`Logout error: ${err.message || 'request failed'}`, false);
+  }
+}
+
+async function heartbeat(){
+  try{
+    const result = await apiCall('/v1/health/heartbeat', {});
+    if(result && result.ok){
+      setReachable('yes');
+    } else {
+      setReachable('yes');
+    }
+  } catch(err){
+    setReachable('no');
+  }
+}
+
+verifyBtn.addEventListener('click', activateKey);
+
+keyInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    activateKey();
+  }
+});
+
+purchaseBtn.addEventListener('click', logoutSession);
+
+async function initKeySystem(){
+  log('Initializing key system...', true);
+  await validateSession();
+  heartbeat();
+  setInterval(heartbeat, HEARTBEAT_INTERVAL);
+}
+
+document.addEventListener('DOMContentLoaded', initKeySystem);
+</script>
+</body>
+</html>
