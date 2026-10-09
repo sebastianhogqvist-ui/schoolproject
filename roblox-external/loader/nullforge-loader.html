@@ -375,7 +375,7 @@ function replayIntro(){
 }
 
 // ---------- key system API wiring ----------
-const API_BASE = '';
+const API_BASE = 'http://127.0.0.1:8080';
 const HEARTBEAT_INTERVAL = 30000;
 
 const keyInput = document.getElementById('keyInput');
@@ -451,7 +451,7 @@ async function apiCall(endpoint, data){
     });
     const result = await resp.json().catch(() => null);
     if(!resp.ok){
-      throw {status: resp.status, message: result?.error || resp.statusText, data: result};
+      throw {status: resp.status, message: result?.error || result?.data?.message || resp.statusText, data: result};
     }
     return result;
   } catch(err){
@@ -471,24 +471,26 @@ async function activateKey(){
   updateAttempts();
   log(`Verifying key: ${key}`, true);
   try{
-    const result = await apiCall('/v1/licenses/activate', {key: key});
-    if(result.success){
+    const result = await apiCall('/v1/keyauth/activate', {key: key, hwid: ''});
+    const payload = (result && result.data) ? result.data : {};
+    if(payload.success){
       log('Key activated successfully', true);
       sessionValid = true;
       updateValidation('valid');
       infoStatus.textContent = 'activated';
-      if(result.sessionId){
-        sessionId = result.sessionId;
+      const inner = payload.data || {};
+      if(inner.sessionId){
+        sessionId = inner.sessionId;
       }
-      if(result.keyInfo){
-        updateKeyInfo(result);
+      if(inner.keyInfo){
+        updateKeyInfo(inner);
       }
     } else {
       attempts++;
       updateAttempts();
-      log(result.message || 'Key verification failed', false);
+      log(payload.message || 'Key verification failed', false);
       updateValidation('invalid');
-      infoStatus.textContent = result.message || 'verification failed';
+      infoStatus.textContent = payload.message || 'verification failed';
     }
   } catch(err){
     log(`Error: ${err.message || 'request failed'}`, false);
@@ -504,16 +506,18 @@ async function activateKey(){
 async function validateSession(){
   updateValidation('checking');
   try{
-    const result = await apiCall('/v1/sessions/validate', {});
-    if(result && result.valid){
+    const result = await apiCall('/v1/keyauth/session/validate', {});
+    const payload = (result && result.data) ? result.data : {};
+    if(result && payload.success){
       sessionValid = true;
-      sessionId = result.sessionId || sessionId;
+      const inner = payload.data || {};
+      sessionId = inner.sessionId || sessionId;
       log('Session is valid', true);
       updateValidation('valid');
       infoStatus.textContent = 'session active';
       setReachable('yes');
-      if(result.keyInfo){
-        updateKeyInfo(result);
+      if(inner.keyInfo){
+        updateKeyInfo(inner);
       }
     } else {
       sessionValid = false;
@@ -530,25 +534,20 @@ async function validateSession(){
 }
 
 async function logoutSession(){
-  try{
-    await apiCall('/v1/sessions/logout', {});
-    sessionValid = false;
-    sessionId = null;
-    log('Logged out successfully', true);
-    updateValidation('idle');
-    infoStatus.textContent = 'logged out';
-  } catch(err){
-    log(`Logout error: ${err.message || 'request failed'}`, false);
-  }
+  sessionValid = false;
+  sessionId = null;
+  log('Logged out successfully', true);
+  updateValidation('idle');
+  infoStatus.textContent = 'logged out';
 }
 
 async function heartbeat(){
   try{
-    const result = await apiCall('/v1/health/heartbeat', {});
-    if(result && result.ok){
+    const result = await apiCall('/v1/keyauth/heartbeat', {});
+    if(result && result.data && result.data.success){
       setReachable('yes');
     } else {
-      setReachable('yes');
+      setReachable('no');
     }
   } catch(err){
     setReachable('no');

@@ -1,0 +1,91 @@
+[project]
+name = "roblox-license-server"
+version = "0.1.0"
+description = "HWID-bound license/key server for the KernelBridge client"
+requires-python = ">=3.13"
+license = { text = "UNLICENSED" }
+
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy>=2.0",
+    "alembic",
+    "pydantic",
+    "pydantic-settings",
+    "pyjwt",
+    "argon2-cffi",
+    "python-multipart",
+]
+
+[project.scripts]
+license-server = "app.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "httpx",
+    "ruff",
+    "mypy",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [".venv", "alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "A",
+    "C4",
+    "S",
+    "SIM",
+    "RUF",
+]
+ignore = [
+    "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# "token" appears in claim-type constant names, not in credential values.
+"app/security/tokens.py" = ["S105"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.mypy]
+explicit_package_bases = true
+python_version = "3.13"
+files = ["app"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "argon2.*",
+]
+ignore_missing_imports = true
