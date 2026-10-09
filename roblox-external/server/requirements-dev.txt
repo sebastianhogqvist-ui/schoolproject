@@ -1,0 +1,22 @@
+# Development and test dependencies, pinned to the versions actually
+# installed in server/.venv. Install on top of the runtime set:
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+-r requirements.txt
+
+ast_serialize==0.11.2
+certifi==2026.7.22
+coverage==7.16.2
+httpcore==1.0.9
+httpx==0.28.1
+iniconfig==2.3.0
+librt==0.16.0
+mypy==2.3.1
+mypy_extensions==1.1.0
+packaging==26.3
+pathspec==1.1.1
+pluggy==1.6.0
+Pygments==2.21.0
+pytest==9.1.1
+pytest-cov==7.1.0
+ruff==0.16.9
