@@ -2,23 +2,30 @@
 
 The client builds a manifest of file hashes (its running binary, loaded
 modules, injected libraries) and signs it before sending it to the server.
-This module provides the hashing and manifest construction primitives that
-both sides use to agree on what constitutes a tampered file.
+This module provides the hashing, signing and parsing primitives that both
+sides use to agree on what constitutes a tampered file.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
+import secrets
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 HASH_ALGORITHM = "sha256"
 HASH_HEX_LENGTH = 64
 MAX_FILE_BYTES = 64 * 1024 * 1024  # 64 MiB guard against pathological inputs
 MANIFEST_VERSION = 1
+MAX_MANIFEST_ENTRIES = 200
+MIN_MANIFEST_NONCE_LENGTH = 8
+
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
 
 
 @dataclass(slots=True)
@@ -41,16 +48,11 @@ class IntegrityManifest:
     """A signed set of file hashes that the client proves it controls."""
 
     version: int = MANIFEST_VERSION
-    generated_at: str = field(
-        default_factory=lambda: datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    )
-    client_id: str = ""
+    client_build: str = ""
+    generated_at: str = ""
+    nonce: str = ""
     files: list[FileHash] = field(default_factory=list)
     signature: str = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the JSON-serialisable view of this manifest."""
-        return asdict(self)
 
 
 def hash_bytes(data: bytes | str, *, algorithm: str = HASH_ALGORITHM) -> str:
@@ -77,12 +79,10 @@ def hash_file(
     size = 0
     with open(path, "rb") as handle:
         for chunk in iter(lambda: handle.read(65536), b""):
-            hasher.update(chunk)
             size += len(chunk)
             if size > max_bytes:
                 raise ValueError(f"file at {path} exceeds {max_bytes} bytes")
-    import os
-
+            hasher.update(chunk)
     mtime = os.path.getmtime(path)
     return FileHash(
         path=path,
@@ -96,7 +96,7 @@ def hash_file(
 def build_manifest(
     paths: list[str],
     *,
-    client_id: str = "",
+    client_build: str = "",
     include_missing: bool = False,
     algorithm: str = HASH_ALGORITHM,
 ) -> IntegrityManifest:
@@ -121,67 +121,194 @@ def build_manifest(
             continue
     return IntegrityManifest(
         version=MANIFEST_VERSION,
-        client_id=client_id,
+        client_build=client_build,
+        generated_at=datetime.now(UTC).isoformat(),
         files=files,
     )
 
 
-def serialize_manifest(manifest: IntegrityManifest) -> str:
-    """Serialise a manifest to canonical JSON (sorted keys, no trailing newline)."""
-    return json.dumps(manifest.to_dict(), sort_keys=True, ensure_ascii=False)
+def manifest_signing_payload(manifest: IntegrityManifest) -> str:
+    """Return the deterministic JSON string covered by the signature.
 
-
-def parse_manifest(raw: str) -> IntegrityManifest:
-    """Parse a canonical-JSON manifest string back into an :class:`IntegrityManifest`."""
-    data = json.loads(raw)
-    files = [
-        FileHash(
-            path=item["path"],
-            algorithm=item["algorithm"],
-            digest=item["digest"],
-            size=item["size"],
-            mtime=item["mtime"],
-        )
-        for item in data.get("files", [])
-    ]
-    return IntegrityManifest(
-        version=data.get("version", MANIFEST_VERSION),
-        generated_at=data.get("generated_at", ""),
-        client_id=data.get("client_id", ""),
-        files=files,
-        signature=data.get("signature", ""),
-    )
-
-
-def verify_manifest(
-    manifest: IntegrityManifest,
-    expected: dict[str, str],
-    *,
-    ignore_mtime: bool = True,
-) -> tuple[bool, list[str]]:
-    """Check every file hash in ``manifest`` against the ``expected`` map.
-
-    ``expected`` maps *path* -> *digest*.  Returns ``(ok, mismatches)`` where
-    ``mismatches`` lists the paths whose digest differs (or is empty when the
-    file is missing from the manifest entirely).
+    Everything that proves *which* files the client was running is covered:
+    the client build, the generation timestamp, the single-use nonce, the
+    manifest version and each file's path/digest/size.  The signature itself
+    is excluded so either side can recompute it over the same payload.
     """
-    observed: dict[str, FileHash] = {f.path: f for f in manifest.files}
+    payload: dict[str, Any] = {
+        "client_build": manifest.client_build,
+        "files": [
+            {"path": record.path, "digest": record.digest, "size": record.size}
+            for record in manifest.files
+        ],
+        "generated_at": manifest.generated_at,
+        "nonce": manifest.nonce,
+        "version": manifest.version,
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
+def sign_manifest(manifest: IntegrityManifest, pepper: str) -> str:
+    """Return the hex HMAC-SHA256 of the signing payload under ``pepper``."""
+    if not pepper:
+        raise ValueError("pepper must not be empty")
+    return hmac.new(
+        pepper.encode("utf-8"),
+        manifest_signing_payload(manifest).encode("utf-8"),
+        HASH_ALGORITHM,
+    ).hexdigest()
+
+
+def verify_manifest_signature(manifest: IntegrityManifest, pepper: str) -> bool:
+    """Return whether ``manifest.signature`` verifies under ``pepper``.
+
+    The comparison is constant-time.  An empty pepper always fails: a
+    deployment without the signing secret must never treat a manifest as
+    authentic.
+    """
+    if not pepper:
+        return False
+    expected = sign_manifest(manifest, pepper)
+    return hmac.compare_digest(expected.encode("utf-8"), manifest.signature.encode("utf-8"))
+
+
+class ManifestParseError(ValueError):
+    """Raised when a client-submitted manifest fails strict validation."""
+
+
+def _is_hex_digest(digest: str) -> bool:
+    """Return whether ``digest`` is a hex string of exactly ``HASH_HEX_LENGTH``."""
+    return len(digest) == HASH_HEX_LENGTH and all(char in _HEX_DIGITS for char in digest)
+
+
+def parse_submitted_manifest(raw: str) -> IntegrityManifest:
+    """Strictly parse a client-submitted manifest string.
+
+    Raises :class:`ManifestParseError` when the payload is not a JSON object,
+    ``files`` is missing or not a list, there are more than
+    ``MAX_MANIFEST_ENTRIES`` entries, an entry lacks ``path``/``digest`` or
+    carries a malformed digest, the ``nonce`` is shorter than
+    ``MIN_MANIFEST_NONCE_LENGTH`` characters, or the ``signature`` is missing
+    or empty.
+    """
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise ManifestParseError(f"manifest is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ManifestParseError("manifest must be a JSON object")
+
+    raw_files = data.get("files")
+    if not isinstance(raw_files, list):
+        raise ManifestParseError("manifest 'files' must be a list")
+    if len(raw_files) > MAX_MANIFEST_ENTRIES:
+        raise ManifestParseError(f"manifest carries more than {MAX_MANIFEST_ENTRIES} entries")
+
+    files: list[FileHash] = []
+    for index, item in enumerate(raw_files):
+        if not isinstance(item, dict):
+            raise ManifestParseError(f"file entry {index} must be an object")
+        path = item.get("path")
+        if not isinstance(path, str) or not path:
+            raise ManifestParseError(f"file entry {index} is missing 'path'")
+        digest = item.get("digest")
+        if not isinstance(digest, str):
+            raise ManifestParseError(f"file entry {index} is missing 'digest'")
+        if not _is_hex_digest(digest):
+            raise ManifestParseError(f"file entry {index} has a malformed digest")
+
+        size = item.get("size", 0)
+        if isinstance(size, bool) or not isinstance(size, int):
+            size = 0
+        algorithm = item.get("algorithm", HASH_ALGORITHM)
+        if not isinstance(algorithm, str) or not algorithm:
+            algorithm = HASH_ALGORITHM
+        mtime = item.get("mtime", 0.0)
+        if isinstance(mtime, bool) or not isinstance(mtime, (int, float)):
+            mtime = 0.0
+        files.append(
+            FileHash(
+                path=path,
+                algorithm=algorithm,
+                digest=digest,
+                size=size,
+                mtime=float(mtime),
+            )
+        )
+
+    nonce = data.get("nonce")
+    if not isinstance(nonce, str) or len(nonce) < MIN_MANIFEST_NONCE_LENGTH:
+        raise ManifestParseError(
+            f"manifest 'nonce' must be at least {MIN_MANIFEST_NONCE_LENGTH} characters"
+        )
+
+    signature = data.get("signature")
+    if not isinstance(signature, str) or not signature:
+        raise ManifestParseError("manifest is missing a signature")
+
+    version = data.get("version", MANIFEST_VERSION)
+    if isinstance(version, bool) or not isinstance(version, int):
+        version = MANIFEST_VERSION
+    generated_at = data.get("generated_at", "")
+    if not isinstance(generated_at, str):
+        generated_at = ""
+    client_build = data.get("client_build", "")
+    if not isinstance(client_build, str):
+        client_build = ""
+
+    return IntegrityManifest(
+        version=version,
+        client_build=client_build,
+        generated_at=generated_at,
+        nonce=nonce,
+        files=files,
+        signature=signature,
+    )
+
+
+@dataclass(slots=True)
+class IntegrityVerdict:
+    """The result of comparing a manifest against expected digests."""
+
+    ok: bool
+    mismatches: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+    unexpected: list[str] = field(default_factory=list)
+
+
+def verify_against_expected(
+    manifest: IntegrityManifest, expected: dict[str, str]
+) -> IntegrityVerdict:
+    """Compare a manifest against a ``path -> digest`` expectations map.
+
+    ``mismatches`` lists paths whose digest differs, ``missing`` lists
+    expected paths absent from the manifest, and ``unexpected`` lists paths
+    the manifest reported that the server did not ask about.  Unexpected
+    paths are reported but never fail the verdict on their own.
+    """
+    observed: dict[str, FileHash] = {record.path: record for record in manifest.files}
     mismatches: list[str] = []
+    missing: list[str] = []
 
     for path, digest in expected.items():
-        if path not in observed:
-            mismatches.append(path)
-            continue
-        record = observed[path]
-        if record.digest != digest:
+        record = observed.get(path)
+        if record is None:
+            missing.append(path)
+        elif record.digest.lower() != digest.lower():
             mismatches.append(path)
 
-    if not ignore_mtime:
-        for path, record in observed.items():
-            if record.size < 0 and expected.get(path):
-                mismatches.append(path)
+    unexpected = [path for path in observed if path not in expected]
+    return IntegrityVerdict(
+        ok=not mismatches and not missing,
+        mismatches=mismatches,
+        missing=missing,
+        unexpected=unexpected,
+    )
 
-    return (len(mismatches) == 0, mismatches)
+
+def generate_nonce(length: int = 32) -> str:
+    """Return a fresh URL-safe single-use nonce."""
+    return secrets.token_urlsafe(length)
 
 
 def iter_file_hashes(manifest: IntegrityManifest) -> Iterator[FileHash]:
@@ -194,13 +321,20 @@ __all__ = [
     "HASH_HEX_LENGTH",
     "MANIFEST_VERSION",
     "MAX_FILE_BYTES",
+    "MAX_MANIFEST_ENTRIES",
+    "MIN_MANIFEST_NONCE_LENGTH",
     "FileHash",
     "IntegrityManifest",
+    "IntegrityVerdict",
+    "ManifestParseError",
     "build_manifest",
+    "generate_nonce",
     "hash_bytes",
     "hash_file",
     "iter_file_hashes",
-    "parse_manifest",
-    "serialize_manifest",
-    "verify_manifest",
+    "manifest_signing_payload",
+    "parse_submitted_manifest",
+    "sign_manifest",
+    "verify_against_expected",
+    "verify_manifest_signature",
 ]

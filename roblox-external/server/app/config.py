@@ -75,6 +75,29 @@ class Settings(BaseSettings):
     ANTI_TAMPER_RESTRICTION_HOURS: int = 24
     ANTI_TAMPER_RETENTION_DAYS: int = 30
 
+    # Client build/version enforcement (anti-downgrade)
+    # The loader echoes its build string; the server rejects builds older than
+    # this. Set REQUIRE_CLIENT_BUILD=false to observe without enforcing.
+    ANTI_TAMPER_MIN_CLIENT_BUILD: str = "1.0.0"
+    ANTI_TAMPER_REQUIRE_CLIENT_BUILD: bool = False
+
+    # Anti-replay: how long a server-issued nonce stays valid, and how long a
+    # client-supplied timestamp may be skewed from server time.
+    ANTI_TAMPER_NONCE_TTL_SECONDS: int = 300
+    ANTI_TAMPER_MAX_CLOCK_SKEW_SECONDS: int = 120
+
+    # Per-endpoint rate limits for the new anti-tamper surface.
+    RATE_LIMIT_KEYAUTH_PER_MINUTE: int = 15
+    RATE_LIMIT_SECURITY_EVENT_PER_MINUTE: int = 10
+    RATE_LIMIT_INTEGRITY_PER_MINUTE: int = 20
+
+    @field_validator("ANTI_TAMPER_MIN_CLIENT_BUILD")
+    @classmethod
+    def _non_empty_client_build(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("ANTI_TAMPER_MIN_CLIENT_BUILD must not be empty")
+        return value
+
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_origins(cls, value: object) -> object:
@@ -124,6 +147,11 @@ class Settings(BaseSettings):
         "ANTI_TAMPER_BAN_THRESHOLD",
         "ANTI_TAMPER_RESTRICTION_HOURS",
         "ANTI_TAMPER_RETENTION_DAYS",
+        "ANTI_TAMPER_NONCE_TTL_SECONDS",
+        "ANTI_TAMPER_MAX_CLOCK_SKEW_SECONDS",
+        "RATE_LIMIT_KEYAUTH_PER_MINUTE",
+        "RATE_LIMIT_SECURITY_EVENT_PER_MINUTE",
+        "RATE_LIMIT_INTEGRITY_PER_MINUTE",
     )
     @classmethod
     def _non_negative(cls, value: int) -> int:
@@ -177,6 +205,11 @@ class Settings(BaseSettings):
         if self.KEYAUTH_APP_SECRET is None:
             return None
         return self.KEYAUTH_APP_SECRET.get_secret_value()
+
+    @property
+    def min_client_build(self) -> str:
+        """The oldest client build string the server will accept."""
+        return self.ANTI_TAMPER_MIN_CLIENT_BUILD
 
     @property
     def is_sqlite(self) -> bool:
