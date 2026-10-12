@@ -1,0 +1,34 @@
+{
+  "name": "nullforge-loader",
+  "version": "1.0.4",
+  "description": "NULLFORGE loader client (Electron desktop shell)",
+  "productName": "NULLFORGE Loader",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac --win --linux",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.nullforge.loader",
+    "productName": "NULLFORGE Loader",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": [
+      "main.js",
+      "nullforge-loader.html",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}
