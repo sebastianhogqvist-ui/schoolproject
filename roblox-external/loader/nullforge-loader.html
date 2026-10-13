@@ -375,6 +375,7 @@ function replayIntro(){
 }
 
 // ---------- key system API wiring ----------
+const CLIENT_BUILD = '1.0.4';
 const API_BASE = 'http://127.0.0.1:8080';
 const HEARTBEAT_INTERVAL = 30000;
 
@@ -392,8 +393,9 @@ const infoHwid = document.getElementById('infoHwid');
 const infoStatus = document.getElementById('infoStatus');
 
 let attempts = 0;
-let sessionId = null;
+let authToken = null;       // server-issued JWT bearer token
 let sessionValid = false;
+let licenseInfo = null;     // keyInfo returned from server
 
 function log(message, isOk){
   const ts = new Date().toISOString();
@@ -418,8 +420,10 @@ function updateValidation(state){
 }
 
 function updateKeyInfo(data){
-  if(data && data.keyInfo){
-    const ki = data.keyInfo;
+  const ki = (data && data.data && data.data.keyInfo) ? data.data.keyInfo
+           : (data && data.keyInfo) ? data.keyInfo
+           : null;
+  if(ki){
     infoPlan.textContent = ki.plan || '—';
     infoDevices.textContent = ki.devices != null ? ki.devices : '—';
     infoFormat.textContent = ki.format || '—';
@@ -441,17 +445,22 @@ function setReachable(state){
   }
 }
 
-async function apiCall(endpoint, data){
+async function apiCall(endpoint, data, includeAuth = false){
   try{
+    const headers = {'Content-Type': 'application/json'};
+    if(includeAuth && authToken){
+      headers['Authorization'] = 'Bearer ' + authToken;
+    }
     const resp = await fetch(API_BASE + endpoint, {
       method: 'POST',
       credentials: 'include',
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: data ? JSON.stringify(data) : undefined
     });
     const result = await resp.json().catch(() => null);
     if(!resp.ok){
-      throw {status: resp.status, message: result?.error || result?.data?.message || resp.statusText, data: result};
+      const errMsg = result?.error?.message || result?.data?.message || resp.statusText;
+      throw {status: resp.status, message: errMsg, data: result};
     }
     return result;
   } catch(err){
@@ -471,26 +480,27 @@ async function activateKey(){
   updateAttempts();
   log(`Verifying key: ${key}`, true);
   try{
-    const result = await apiCall('/v1/keyauth/activate', {key: key, hwid: ''});
-    const payload = (result && result.data) ? result.data : {};
-    if(payload.success){
-      log('Key activated successfully', true);
+    const result = await apiCall('/v1/keyauth/activate', {key: key, hwid: 'electron-client', client_build: CLIENT_BUILD});
+    if(result && result.success){
+      const inner = result.data || {};
+      if(inner.token){
+        authToken = inner.token;
+        log('Authentication token received from server', true);
+      }
       sessionValid = true;
       updateValidation('valid');
       infoStatus.textContent = 'activated';
-      const inner = payload.data || {};
-      if(inner.sessionId){
-        sessionId = inner.sessionId;
-      }
       if(inner.keyInfo){
+        licenseInfo = inner.keyInfo;
         updateKeyInfo(inner);
       }
+      log('Key activated successfully', true);
     } else {
       attempts++;
       updateAttempts();
-      log(payload.message || 'Key verification failed', false);
+      log(result?.error?.message || 'Key verification failed', false);
       updateValidation('invalid');
-      infoStatus.textContent = payload.message || 'verification failed';
+      infoStatus.textContent = result?.error?.message || 'verification failed';
     }
   } catch(err){
     log(`Error: ${err.message || 'request failed'}`, false);
@@ -504,21 +514,22 @@ async function activateKey(){
 }
 
 async function validateSession(){
+  if(!authToken){
+    updateValidation('idle');
+    return;
+  }
   updateValidation('checking');
   try{
-    const result = await apiCall('/v1/keyauth/session/validate', {});
-    const payload = (result && result.data) ? result.data : {};
-    if(result && payload.success){
+    const result = await apiCall('/v1/keyauth/session/validate', {client_build: CLIENT_BUILD}, true);
+    if(result && result.success){
       sessionValid = true;
-      const inner = payload.data || {};
-      sessionId = inner.sessionId || sessionId;
+      const inner = result.data || {};
+      licenseInfo = inner.keyInfo || licenseInfo;
+      if(licenseInfo){ updateKeyInfo({data: {keyInfo: licenseInfo}}); }
       log('Session is valid', true);
       updateValidation('valid');
       infoStatus.textContent = 'session active';
       setReachable('yes');
-      if(inner.keyInfo){
-        updateKeyInfo(inner);
-      }
     } else {
       sessionValid = false;
       log('Session is invalid or expired', false);
@@ -527,30 +538,82 @@ async function validateSession(){
       setReachable('yes');
     }
   } catch(err){
-    log(`Session validation error: ${err.message || 'server unreachable'}`, false);
-    updateValidation('invalid');
-    setReachable('no');
+    if(err.status === 401){
+      log('Session token expired or invalid', false);
+      authToken = null;
+      sessionValid = false;
+      updateValidation('invalid');
+      infoStatus.textContent = 'session expired';
+      setReachable('no');
+    } else {
+      log(`Session validation error: ${err.message || 'server unreachable'}`, false);
+      updateValidation('invalid');
+      setReachable('no');
+    }
   }
 }
 
-async function logoutSession(){
+function logoutSession(){
+  authToken = null;
   sessionValid = false;
-  sessionId = null;
+  licenseInfo = null;
   log('Logged out successfully', true);
   updateValidation('idle');
   infoStatus.textContent = 'logged out';
+  infoPlan.textContent = '—';
+  infoDevices.textContent = '—';
+  infoFormat.textContent = '—';
+  infoHwid.textContent = '—';
 }
 
 async function heartbeat(){
   try{
-    const result = await apiCall('/v1/keyauth/heartbeat', {});
-    if(result && result.data && result.data.success){
+    const result = await apiCall('/v1/keyauth/heartbeat', {client_build: CLIENT_BUILD}, authToken ? true : false);
+    if(result && result.success){
       setReachable('yes');
     } else {
       setReachable('no');
     }
   } catch(err){
     setReachable('no');
+  }
+}
+
+async function reportSecurityEvent(level, category, rule, reason, evidence){
+  if(!authToken) return;
+  try{
+    await apiCall('/v1/security/event', {level, category, rule, reason, evidence}, true);
+    log(`Security event reported: ${rule}`, true);
+  } catch(err){
+    log(`Failed to report security event: ${err.message || 'request failed'}`, false);
+  }
+}
+
+async function integrityChallenge(){
+  if(!authToken) return null;
+  try{
+    const result = await apiCall('/v1/integrity/challenge', {client_build: CLIENT_BUILD}, true);
+    if(result && result.success){
+      return result.data?.request_token || null;
+    }
+  } catch(err){
+    log(`Integrity challenge failed: ${err.message || 'request failed'}`, false);
+  }
+  return null;
+}
+
+async function checkIntegrity(nonce){
+  if(!authToken) return;
+  try{
+    const result = await apiCall('/v1/integrity/check', {nonce, client_build: CLIENT_BUILD, generated_at: new Date().toISOString(), files: [], signature: ''}, true);
+    if(result && result.success){
+      log('Integrity check passed', true);
+    } else {
+      log('Integrity check failed: ' + (result?.error?.message || 'server rejected manifest'), false);
+      reportSecurityEvent(2, 'integrity', 'FILE_DIGEST_MISMATCH', 'Client integrity check failed', {});
+    }
+  } catch(err){
+    log('Integrity check error: ' + (err.message || 'request failed'), false);
   }
 }
 
@@ -570,6 +633,7 @@ async function initKeySystem(){
   await validateSession();
   heartbeat();
   setInterval(heartbeat, HEARTBEAT_INTERVAL);
+  setInterval(validateSession, 60000);
 }
 
 document.addEventListener('DOMContentLoaded', initKeySystem);
