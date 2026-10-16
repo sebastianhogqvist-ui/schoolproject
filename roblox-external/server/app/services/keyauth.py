@@ -16,6 +16,7 @@ from httpx import AsyncClient, HTTPStatusError, RequestError
 from app.config import Settings
 from app.keys import normalize_license_key
 from app.logging_config import get_logger
+from app.services.integrity import build_id_allowed
 
 logger = get_logger("keyauth")
 
@@ -108,6 +109,7 @@ async def validate_license_key(
     settings: Settings,
     raw_key: str,
     hwid: str | None = None,
+    client_build: str | None = None,
 ) -> KeyAuthResult:
     """Validate a license key through KeyAuth.
 
@@ -118,6 +120,17 @@ async def validate_license_key(
         return KeyAuthResult(
             success=False,
             message="KeyAuth is not configured on this server",
+        )
+
+    # Enforce minimum client build when one was supplied
+    if (
+        client_build is not None
+        and settings.ANTI_TAMPER_REQUIRE_CLIENT_BUILD
+        and not build_id_allowed(client_build, settings)
+    ):
+        return KeyAuthResult(
+            success=False,
+            message="Client build is not permitted on this server",
         )
 
     # Validate key format locally first

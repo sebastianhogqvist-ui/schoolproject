@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.errors import AppError, ErrorCode
 from app.logging_config import get_logger
-from app.models import Admin, utcnow
+from app.models import Admin
 from app.repositories import admins as admin_repo
 from app.security import tokens
 from app.security.passwords import dummy_hash, hash_password, needs_rehash, verify_password

@@ -300,7 +300,7 @@ def activate(
         ttl_seconds=settings.SESSION_TTL_SECONDS,
         settings=settings,
     )
-    session_row = session_repo.create_session(
+    session_repo.create_session(
         session,
         jti=session_id,
         license_id=license_row.id,

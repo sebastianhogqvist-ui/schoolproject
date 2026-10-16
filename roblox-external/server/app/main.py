@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.v1 import admin, health, keyauth, licenses, sessions
+from app.api.v1 import admin, health, integrity, keyauth, licenses, security, sessions
 from app.config import Settings, get_settings
 from app.db import configure_database
 from app.errors import AppError, ErrorCode
@@ -77,6 +77,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sessions.router)
     app.include_router(admin.router)
     app.include_router(keyauth.router)
+    app.include_router(integrity.router)
+    app.include_router(security.router)
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:

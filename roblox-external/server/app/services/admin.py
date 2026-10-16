@@ -123,7 +123,9 @@ def create_license(
     UNIQUE ``key_hash`` index is resolved by generating a new key, not by
     overwriting the existing row.
     """
-    expires_at = resolve_expiry(expires_in_days=expires_in_days, custom_expires_at=custom_expires_at)
+    expires_at = resolve_expiry(
+        expires_in_days=expires_in_days, custom_expires_at=custom_expires_at
+    )
     metadata_json = _serialize_metadata(metadata)
     clean_note = note.strip()[:MAX_NOTE_LENGTH] if note else None
 
@@ -151,7 +153,10 @@ def create_license(
             success=True,
             ip=ip,
             user_agent=user_agent,
-            metadata={"expires_at": expires_at.isoformat() if expires_at else None, "has_note": bool(clean_note)},
+            metadata={
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "has_note": bool(clean_note),
+            },
         )
         session.commit()
         return license_row, plaintext
@@ -353,7 +358,9 @@ def list_licenses(
     return pagination, [serialize_license(row) for row in rows]
 
 
-def license_detail(session: Session, license_id: int, *, page: int, page_size: int) -> dict[str, Any]:
+def license_detail(
+    session: Session, license_id: int, *, page: int, page_size: int
+) -> dict[str, Any]:
     """Return one license plus a page of its activation trail."""
     license_row = _require_license(session, license_id)
     rows, total = activation_repo.list_for_license(

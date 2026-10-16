@@ -109,7 +109,7 @@ async def list_licenses(
     _rate_limited: None = _admin_api_rl,
     params: LicenseListRequest = _list_params_dep,
 ) -> SuccessResponse:
-    pagination, rows = admin_svc.list_licensing(
+    pagination, rows = admin_svc.list_licenses(
         session,
         status=_resolve_status(params.status),
         query=params.query,
@@ -118,7 +118,7 @@ async def list_licenses(
     )
     data = {
         "pagination": wire(pagination),
-        "licenses": [wire(admin_svc.serialize_license(r)) for r in rows],
+        "licenses": [wire(r) for r in rows],
     }
     return success(data)
 

@@ -26,7 +26,10 @@ __all__ = [
     "client_dep",
     "client_ip",
     "client_user_agent",
+    "integrity_rate_limit",
     "iso",
+    "keyauth_rate_limit",
+    "security_event_rate_limit",
     "settings_dep",
     "unix",
     "wire",
@@ -84,6 +87,9 @@ def _rate_limit_for(group: str) -> Any:
         "auth": "RATE_LIMIT_AUTH_PER_MINUTE",
         "admin_login": "RATE_LIMIT_ADMIN_LOGIN_PER_MINUTE",
         "admin_api": "RATE_LIMIT_ADMIN_API_PER_MINUTE",
+        "keyauth": "RATE_LIMIT_KEYAUTH_PER_MINUTE",
+        "security_event": "RATE_LIMIT_SECURITY_EVENT_PER_MINUTE",
+        "integrity": "RATE_LIMIT_INTEGRITY_PER_MINUTE",
     }[group]
 
     async def _guard(request: Request) -> None:
@@ -100,6 +106,9 @@ def _rate_limit_for(group: str) -> Any:
 auth_rate_limit = _rate_limit_for("auth")
 admin_login_rate_limit = _rate_limit_for("admin_login")
 admin_api_rate_limit = _rate_limit_for("admin_api")
+keyauth_rate_limit = _rate_limit_for("keyauth")
+security_event_rate_limit = _rate_limit_for("security_event")
+integrity_rate_limit = _rate_limit_for("integrity")
 
 
 def iso(value: datetime | None) -> str | None:

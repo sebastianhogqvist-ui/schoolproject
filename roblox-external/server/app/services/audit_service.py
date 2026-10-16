@@ -77,7 +77,7 @@ def _is_sensitive(key: str) -> bool:
 
 def _coerce(value: Any) -> Any:
     """Reduce a value to an inert JSON scalar, or drop it."""
-    if isinstance(value, bool) or isinstance(value, int) or isinstance(value, float):
+    if isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
         return value[:200]
@@ -179,6 +179,6 @@ def record_and_commit(
             metadata=metadata,
         )
         session.commit()
-    except Exception:  # noqa: BLE001 - auditing must never replace the caller's error
+    except Exception:  # auditing must never replace the caller's error
         session.rollback()
         logger.warning("failed to persist audit row", extra={"app_action": action})
