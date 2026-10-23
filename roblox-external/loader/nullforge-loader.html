@@ -376,7 +376,7 @@ function replayIntro(){
 
 // ---------- key system API wiring ----------
 const CLIENT_BUILD = '1.0.4';
-const API_BASE = 'http://127.0.0.1:8080';
+const API_BASE = '';
 const HEARTBEAT_INTERVAL = 30000;
 
 const keyInput = document.getElementById('keyInput');
@@ -400,7 +400,11 @@ let licenseInfo = null;     // keyInfo returned from server
 function log(message, isOk){
   const ts = new Date().toISOString();
   const prefix = isOk ? '[OK] ' : '[ERROR] ';
-  ksLog.innerHTML += `<span class="${isOk ? 'ok' : ''}">${prefix}${ts} - ${message}</span><br>`;
+  const line = document.createElement('div');
+  const colorClass = isOk ? 'ok' : '';
+  line.className = colorClass;
+  line.textContent = prefix + ts + ' - ' + message;
+  ksLog.appendChild(line);
   ksLog.scrollTop = ksLog.scrollHeight;
 }
 
@@ -610,7 +614,7 @@ async function checkIntegrity(nonce){
       log('Integrity check passed', true);
     } else {
       log('Integrity check failed: ' + (result?.error?.message || 'server rejected manifest'), false);
-      reportSecurityEvent(2, 'integrity', 'FILE_DIGEST_MISMATCH', 'Client integrity check failed', {});
+
     }
   } catch(err){
     log('Integrity check error: ' + (err.message || 'request failed'), false);

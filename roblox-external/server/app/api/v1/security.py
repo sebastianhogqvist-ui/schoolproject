@@ -1,6 +1,7 @@
 """Security event reporting and enforcement status endpoints."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -45,7 +46,7 @@ async def report_security_event(
         reason=payload.reason,
         ip=client_ip(request),
         user_agent=client_user_agent(request),
-        evidence=__import__("json").dumps(payload.evidence) if payload.evidence else None,
+        evidence=json.dumps(payload.evidence) if payload.evidence else None,
     )
     session.commit()
     return success({

@@ -7,6 +7,7 @@ are never logged or returned to clients.
 KeyAuth API base: https://keyauth.win/api/1.3/
 API style: GET requests with query parameters.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,6 +22,8 @@ from app.services.integrity import build_id_allowed
 logger = get_logger("keyauth")
 
 KEYAUTH_API_BASE = "https://keyauth.win/api/1.3/"
+
+_SANITIZED_KEYAUTH_ERROR = "KeyAuth service error"
 
 
 class KeyAuthError(Exception):
@@ -48,9 +51,7 @@ class KeyAuthResult:
 def is_keyauth_configured(settings: Settings) -> bool:
     """Return whether all required KeyAuth credentials are present."""
     return bool(
-        settings.KEYAUTH_OWNER_ID
-        and settings.KEYAUTH_APP_SECRET
-        and settings.KEYAUTH_APP_NAME
+        settings.KEYAUTH_OWNER_ID and settings.KEYAUTH_APP_SECRET and settings.KEYAUTH_APP_NAME
     )
 
 
@@ -94,7 +95,7 @@ async def _keyauth_init(settings: Settings, client: AsyncClient) -> str:
     if not payload.get("success"):
         msg = payload.get("message", "KeyAuth initialization failed")
         logger.warning("keyauth init rejected: %s", msg)
-        raise KeyAuthError(msg)
+        raise KeyAuthError(_SANITIZED_KEYAUTH_ERROR)
 
     sessionid = payload.get("sessionid")
     if not sessionid:
@@ -145,8 +146,8 @@ async def validate_license_key(
     async with AsyncClient() as client:
         try:
             sessionid = await _keyauth_init(settings, client)
-        except KeyAuthError as exc:
-            return KeyAuthResult(success=False, message=str(exc))
+        except KeyAuthError:
+            return KeyAuthResult(success=False, message=_SANITIZED_KEYAUTH_ERROR)
 
         params = {
             "type": "license",
@@ -160,8 +161,8 @@ async def validate_license_key(
 
         try:
             payload = await _keyauth_request(settings, client, params)
-        except KeyAuthError as exc:
-            return KeyAuthResult(success=False, message=str(exc))
+        except KeyAuthError:
+            return KeyAuthResult(success=False, message=_SANITIZED_KEYAUTH_ERROR)
 
     success = payload.get("success", False)
     message = payload.get("message", "")
@@ -181,8 +182,8 @@ async def validate_license_key(
 
     return KeyAuthResult(
         success=success,
-        message=message or (
-            "License validated successfully" if success else "License validation failed"
+        message=(
+            message or "License validated successfully" if success else _SANITIZED_KEYAUTH_ERROR
         ),
         data={
             "sessionId": sessionid,
@@ -206,8 +207,8 @@ async def validate_session(settings: Settings) -> KeyAuthResult:
     async with AsyncClient() as client:
         try:
             sessionid = await _keyauth_init(settings, client)
-        except KeyAuthError as exc:
-            return KeyAuthResult(success=False, message=str(exc))
+        except KeyAuthError:
+            return KeyAuthResult(success=False, message=_SANITIZED_KEYAUTH_ERROR)
 
     key_info: dict[str, Any] = {
         "plan": "—",
@@ -235,8 +236,8 @@ async def heartbeat(settings: Settings) -> KeyAuthResult:
     async with AsyncClient() as client:
         try:
             sessionid = await _keyauth_init(settings, client)
-        except KeyAuthError as exc:
-            return KeyAuthResult(success=False, message=str(exc))
+        except KeyAuthError:
+            return KeyAuthResult(success=False, message=_SANITIZED_KEYAUTH_ERROR)
 
     return KeyAuthResult(
         success=True,
