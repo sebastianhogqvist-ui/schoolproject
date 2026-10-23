@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Request
 from app.config import Settings
 from app.deps import settings_dep
 from app.errors import AppError, ErrorCode
-from app.schemas import ActivateRequest, SuccessResponse, ValidateRequest, success
+from app.schemas import KeyAuthActivateRequest, SuccessResponse, ValidateRequest, success
 from app.services import keyauth as keyauth_svc
 from app.services.keyauth import KeyAuthError
 
@@ -21,7 +21,7 @@ _settings_dep = Depends(settings_dep)
 
 @router.post("/activate")
 async def keyauth_activate(
-    payload: ActivateRequest,
+    payload: KeyAuthActivateRequest,
     request: Request,
     settings: Settings = _settings_dep,
 ) -> SuccessResponse:
@@ -34,6 +34,7 @@ async def keyauth_activate(
             settings,
             raw_key=payload.key,
             hwid=payload.hwid,
+            client_build=payload.client_build,
         )
     except KeyAuthError as exc:
         raise AppError(ErrorCode.SERVICE_MAINTENANCE, "KeyAuth validation failed") from exc

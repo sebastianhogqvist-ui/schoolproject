@@ -508,7 +508,7 @@ INT APIENTRY WinMain(HINSTANCE instance, HINSTANCE, PSTR, INT cmd_show) {
           ZS   ZS                   
          ZS     Z        
           ZS     ZS  
-           ZS  
+           ZS     
 
 Mogesalmebit ZeruaS Roblox External Kernel Chetshi, Sasiamovno Cheterobas Gisurvebt
 

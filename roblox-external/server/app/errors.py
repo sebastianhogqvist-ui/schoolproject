@@ -46,7 +46,7 @@ CODE_HTTP_STATUS: dict[ErrorCode, int] = {
     ErrorCode.AUTH_REQUIRED: 401,
     ErrorCode.FORBIDDEN: 403,
     ErrorCode.ADMIN_AUTH_FAILED: 401,
-    ErrorCode.VALIDATION_ERROR: 400,
+    ErrorCode.VALIDATION_ERROR: 422,
     ErrorCode.SERVICE_MAINTENANCE: 503,
     ErrorCode.DATABASE_UNAVAILABLE: 503,
     ErrorCode.INTERNAL_ERROR: 500,

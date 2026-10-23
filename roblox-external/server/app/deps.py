@@ -41,6 +41,9 @@ def settings_dep() -> Settings:
     return get_settings()
 
 
+_settings_dep = Depends(settings_dep)
+
+
 def client_ip(request: Request) -> str:
     """Best-effort client IP, honouring X-Forwarded-For when present."""
     forwarded = request.headers.get("x-forwarded-for")
@@ -64,21 +67,23 @@ _bearer = Depends(bearer_scheme)
 async def admin_dep(
     session: DbSession,
     credentials: HTTPAuthorizationCredentials | None = _bearer,
+    settings: Settings = _settings_dep,
 ) -> Admin:
     """Resolve and return the admin named by the bearer token, or raise."""
     if credentials is None:
         raise AppError(ErrorCode.AUTH_REQUIRED)
-    return auth_svc.resolve_admin(session, credentials.credentials, get_settings())
+    return auth_svc.resolve_admin(session, credentials.credentials, settings)
 
 
 async def client_dep(
     session: DbSession,
     credentials: HTTPAuthorizationCredentials | None = _bearer,
+    settings: Settings = _settings_dep,
 ) -> SessionContext:
     """Resolve and return the client session named by the bearer token, or raise."""
     if credentials is None:
         raise AppError(ErrorCode.SESSION_MISSING)
-    return license_svc.resolve_session(session, credentials.credentials, get_settings())
+    return license_svc.resolve_session(session, credentials.credentials, settings)
 
 
 def _rate_limit_for(group: str) -> Any:
