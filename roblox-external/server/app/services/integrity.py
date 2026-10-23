@@ -156,7 +156,7 @@ def assess_manifest(
     nonce: str,
     client_build: str,
     settings: Settings,
-    pepper: str,
+    pepper: str | None = None,
     store: NonceStore,
     now: datetime | None = None,
     expected_hashes: dict[str, str] | None = None,
@@ -166,6 +166,8 @@ def assess_manifest(
     Checks are applied in order and fail closed.  The first failure produces the
     verdict; only a manifest that passes every check is ``accepted`` at level 0.
     """
+    if pepper is None:
+        pepper = settings.integrity_pepper
     now = now or datetime.now(UTC)
     expected = expected_hashes if expected_hashes is not None else load_expected_hashes(settings)
 

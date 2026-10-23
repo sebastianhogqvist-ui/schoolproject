@@ -64,10 +64,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
+        allow_origins=settings.CORS_ALLOWED_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
-        allow_credentials=False,
+        allow_credentials=True,
     )
     app.add_middleware(_MaintenanceMiddleware)
     app.add_middleware(_BodySizeMiddleware)

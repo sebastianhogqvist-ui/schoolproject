@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from app.config import Settings
-from app.deps import settings_dep
+from app.deps import keyauth_rate_limit, settings_dep
 from app.errors import AppError, ErrorCode
 from app.schemas import KeyAuthActivateRequest, SuccessResponse, ValidateRequest, success
 from app.services import keyauth as keyauth_svc
@@ -17,6 +17,7 @@ from app.services.keyauth import KeyAuthError
 router = APIRouter(prefix="/v1/keyauth", tags=["keyauth"])
 
 _settings_dep = Depends(settings_dep)
+_keyauth_rate_limit = Depends(keyauth_rate_limit)
 
 
 @router.post("/activate")
@@ -24,6 +25,7 @@ async def keyauth_activate(
     payload: KeyAuthActivateRequest,
     request: Request,
     settings: Settings = _settings_dep,
+    _rate_limited: None = _keyauth_rate_limit,
 ) -> SuccessResponse:
     """Validate a license key through KeyAuth and return the result.
 
@@ -48,6 +50,7 @@ async def keyauth_validate_session(
     payload: ValidateRequest,
     request: Request,
     settings: Settings = _settings_dep,
+    _rate_limited: None = _keyauth_rate_limit,
 ) -> SuccessResponse:
     """Validate the current KeyAuth session.
 
@@ -67,6 +70,7 @@ async def keyauth_validate_session(
 async def keyauth_heartbeat(
     request: Request,
     settings: Settings = _settings_dep,
+    _rate_limited: None = _keyauth_rate_limit,
 ) -> SuccessResponse:
     """Check whether the KeyAuth service is reachable."""
     try:

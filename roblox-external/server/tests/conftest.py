@@ -16,10 +16,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 TEST_JWT_SECRET = "test-jwt-secret-key-min-32-chars-long!!"  # noqa: S105
 TEST_KEY_PEPPER = "test-license-key-pepper-value"
 TEST_HWID_PEPPER = "test-hwid-pepper-value"
+TEST_INTEGRITY_PEPPER = "test-integrity-pepper-value"
 
 os.environ.setdefault("LICENSE_JWT_SECRET", TEST_JWT_SECRET)
 os.environ.setdefault("LICENSE_KEY_PEPPER", TEST_KEY_PEPPER)
 os.environ.setdefault("HWID_PEPPER", TEST_HWID_PEPPER)
+os.environ.setdefault("INTEGRITY_PEPPER", TEST_INTEGRITY_PEPPER)
 
 from app.config import Settings, get_settings  # noqa: E402
 from app.db import Base, SessionLocal, configure_database  # noqa: E402
@@ -38,6 +40,7 @@ def _make_test_settings(**overrides: object) -> Settings:
         "JWT_AUDIENCE": "test-audience",
         "LICENSE_KEY_PEPPER": TEST_KEY_PEPPER,
         "HWID_PEPPER": TEST_HWID_PEPPER,
+        "INTEGRITY_PEPPER": TEST_INTEGRITY_PEPPER,
         "ADMIN_USERNAME": "admin",
         "ADMIN_PASSWORD": None,
         "RATE_LIMIT_ENABLED": False,

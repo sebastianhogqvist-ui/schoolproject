@@ -43,6 +43,7 @@ class Settings(BaseSettings):
 
     LICENSE_KEY_PEPPER: SecretStr = Field(min_length=MIN_PEPPER_LENGTH)
     HWID_PEPPER: SecretStr = Field(min_length=MIN_PEPPER_LENGTH)
+    INTEGRITY_PEPPER: SecretStr = Field(min_length=MIN_PEPPER_LENGTH)
 
     ADMIN_USERNAME: str | None = None
     ADMIN_PASSWORD: SecretStr | None = None
@@ -190,6 +191,11 @@ class Settings(BaseSettings):
         return self.HWID_PEPPER.get_secret_value()
 
     @property
+    def integrity_pepper(self) -> str:
+        """The raw integrity manifest pepper, for HMAC operations."""
+        return self.INTEGRITY_PEPPER.get_secret_value()
+
+    @property
     def keyauth_owner_id(self) -> str | None:
         """The KeyAuth owner ID for license verification."""
         return self.KEYAUTH_OWNER_ID
@@ -228,14 +234,16 @@ class Settings(BaseSettings):
                 f"LICENSE_JWT_SECRET must be at least {MIN_JWT_SECRET_LENGTH} characters"
             )
 
-        for name in ("LICENSE_KEY_PEPPER", "HWID_PEPPER"):
+        for name in ("LICENSE_KEY_PEPPER", "HWID_PEPPER", "INTEGRITY_PEPPER"):
             pepper = getattr(self, name).get_secret_value()
             if not pepper:
                 problems.append(f"{name} is empty")
             elif len(pepper) < MIN_PEPPER_LENGTH:
                 problems.append(f"{name} must be at least {MIN_PEPPER_LENGTH} characters")
 
-        if self.jwt_secret and self.jwt_secret in {self.license_key_pepper, self.hwid_pepper}:
+        if self.jwt_secret and self.jwt_secret in {
+            self.license_key_pepper, self.hwid_pepper, self.integrity_pepper,
+        }:
             problems.append("LICENSE_JWT_SECRET must differ from the peppers")
 
         if problems:

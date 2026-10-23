@@ -60,7 +60,7 @@ async def integrity_check(
         nonce=payload.nonce,
         client_build=payload.client_build,
         settings=settings,
-        pepper=settings.license_key_pepper,
+        pepper=settings.integrity_pepper,
         store=integrity_svc.nonce_store,
         expected_hashes=integrity_svc.load_expected_hashes(settings),
     )
