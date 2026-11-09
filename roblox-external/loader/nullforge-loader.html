@@ -376,7 +376,7 @@ function replayIntro(){
 
 // ---------- key system API wiring ----------
 const CLIENT_BUILD = '1.0.4';
-const API_BASE = '';
+const API_BASE = 'http://localhost:8080';
 const HEARTBEAT_INTERVAL = 30000;
 
 const keyInput = document.getElementById('keyInput');
@@ -484,11 +484,11 @@ async function activateKey(){
   updateAttempts();
   log(`Verifying key: ${key}`, true);
   try{
-    const result = await apiCall('/v1/keyauth/activate', {key: key, hwid: 'electron-client', client_build: CLIENT_BUILD});
+    const result = await apiCall('/v1/licenses/activate', {key: key, hwid: 'electron-client', client_build: CLIENT_BUILD});
     if(result && result.success){
       const inner = result.data || {};
-      if(inner.token){
-        authToken = inner.token;
+      if(inner.session_token){
+        authToken = inner.session_token;
         log('Authentication token received from server', true);
       }
       sessionValid = true;
@@ -524,7 +524,7 @@ async function validateSession(){
   }
   updateValidation('checking');
   try{
-    const result = await apiCall('/v1/keyauth/session/validate', {client_build: CLIENT_BUILD}, true);
+    const result = await apiCall('/v1/sessions/validate', {hwid: 'electron-client', client_build: CLIENT_BUILD}, true);
     if(result && result.success){
       sessionValid = true;
       const inner = result.data || {};
