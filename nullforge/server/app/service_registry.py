@@ -8,10 +8,10 @@ prevents race conditions when multiple services start simultaneously.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
-import fcntl
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path

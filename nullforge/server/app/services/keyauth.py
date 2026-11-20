@@ -49,8 +49,9 @@ class KeyAuthResult:
 
 
 def is_keyauth_configured(settings: Settings) -> bool:
-    """Return whether all required KeyAuth credentials are present."""
+    """Return whether KeyAuth is enabled and all required credentials are present."""
     return bool(
+        settings.KEYAUTH_ENABLED and
         settings.KEYAUTH_OWNER_ID and settings.KEYAUTH_APP_SECRET and settings.KEYAUTH_APP_NAME
     )
 

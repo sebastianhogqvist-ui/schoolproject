@@ -208,7 +208,7 @@ async def _proxy_request(
             url=url,
             headers=headers,
             content=body,
-            timeout=30.0,
+            timeout=httpx.Timeout(connect=5.0, read=25.0, write=10.0, pool=5.0),
         )
     except httpx.TimeoutException as exc:
         logger.warning("proxy request timeout: %s", exc)
@@ -219,7 +219,7 @@ async def _proxy_request(
     except httpx.RequestError as exc:
         logger.error("proxy request failed: %s", exc)
         raise AppError(ErrorCode.INTERNAL_ERROR, "backend communication failed") from None
-    except Exception as exc:  # Safety net for any unexpected errors
+    except Exception:  # Safety net for any unexpected errors
         logger.exception("unexpected proxy error")
         raise AppError(ErrorCode.INTERNAL_ERROR, "internal gateway error") from None
 
@@ -316,7 +316,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("license", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -331,7 +333,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("session", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -343,7 +347,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("session", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -358,7 +364,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("security", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -370,7 +378,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("security", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -384,7 +394,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("integrity", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -397,7 +409,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
     ) -> Response:
         backend_url = service_backend("integrity", settings)
         service_token = make_service_token(
-            (context.session_id, context.license.id), settings, scope=_scope_for_path(request.url.path)
+            (context.session_id, context.license.id),
+            settings,
+            scope=_scope_for_path(request.url.path),
         )
         return await _proxy_request(request, backend_url, service_token)
 
@@ -438,7 +452,9 @@ def create_gateway_app(settings: Settings | None = None) -> FastAPI:
         """Proxy all other admin routes to admin backend."""
         backend_url = service_backend("admin", settings)
         full_path = f"/v1/admin/{path}"
-        service_token = make_admin_service_token(admin.id, settings, scope=_scope_for_path(full_path))
+        service_token = make_admin_service_token(
+            admin.id, settings, scope=_scope_for_path(full_path)
+        )
         return await _proxy_request(request, backend_url, service_token)
 
     return app

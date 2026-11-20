@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     BCRYPT_MEMORY_COST: int = 65536
     BCRYPT_PARALLELISM: int = 4
 
+    KEYAUTH_ENABLED: bool = False
     KEYAUTH_OWNER_ID: str | None = None
     KEYAUTH_APP_SECRET: SecretStr | None = None
     KEYAUTH_APP_NAME: str | None = None

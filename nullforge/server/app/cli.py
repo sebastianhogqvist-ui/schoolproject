@@ -223,7 +223,7 @@ def cmd_keygen(args: argparse.Namespace, settings: Settings) -> int:
             else:
                 session.rollback()
                 sys.stderr.write(
-                    f"error: could not generate a unique license key after {KEYGEN_COLLISION_RETRIES} attempts\n"
+                    f"error: could not generate a unique license key after {KEYGEN_COLLISION_RETRIES} attempts\n"  # noqa: E501
                 )
                 return EXIT_FAILURE
 

@@ -60,6 +60,7 @@ def _make_test_settings(**overrides: object) -> Settings:
         "KEYAUTH_OWNER_ID": "test-owner-id",
         "KEYAUTH_APP_SECRET": "test-app-secret-for-keyauth",
         "KEYAUTH_APP_NAME": "test-app-name",
+        "KEYAUTH_ENABLED": True,
         "CORS_ALLOWED_ORIGINS": "",
         "MAINTENANCE_MODE": False,
         "LOG_LEVEL": "WARNING",

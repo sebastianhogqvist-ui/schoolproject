@@ -38,12 +38,30 @@ class ActivateRequest(BaseModel):
 
     key: str = Field(..., min_length=1, max_length=256)
     hwid: str = Field(..., min_length=1, max_length=1024)
+    client_build: str = Field(..., min_length=1, max_length=32)
+
+    @field_validator("client_build")
+    @classmethod
+    def _clean_build(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned or len(cleaned) > 32:
+            raise ValueError("client_build must be 1-32 characters")
+        return cleaned
 
 
 class ValidateRequest(BaseModel):
     """Body for POST /v1/sessions/validate."""
 
     hwid: str = Field(..., min_length=1, max_length=1024)
+    client_build: str = Field(..., min_length=1, max_length=32)
+
+    @field_validator("client_build")
+    @classmethod
+    def _clean_build(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned or len(cleaned) > 32:
+            raise ValueError("client_build must be 1-32 characters")
+        return cleaned
 
 
 class AdminLoginRequest(BaseModel):
@@ -76,6 +94,7 @@ class LicenseListRequest(BaseModel):
     query: str | None = Field(default=None, max_length=64)
     page: int = Field(1, ge=1)
     page_size: int = Field(50, ge=1, le=200)
+
 
 class KeyAuthActivateRequest(BaseModel):
     """Body for POST /v1/keyauth/activate.

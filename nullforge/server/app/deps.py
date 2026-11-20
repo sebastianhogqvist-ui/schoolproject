@@ -155,21 +155,21 @@ def _rate_limit_key(request: Request, group: str, settings: Settings) -> str:
         token = auth_header[7:]
         # Try to decode as client token to get session_id
         try:
-            from app.security.tokens import decode_token, CLIENT_TOKEN_TYPE
+            from app.security.tokens import CLIENT_TOKEN_TYPE, decode_token
             claims = decode_token(token, settings, expected_type=CLIENT_TOKEN_TYPE)
             session_id = claims.get("sid")
             if session_id:
                 return f"{group}:session:{session_id}"
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         # Try to decode as admin token
         try:
-            from app.security.tokens import decode_token, ADMIN_TOKEN_TYPE
+            from app.security.tokens import ADMIN_TOKEN_TYPE, decode_token
             claims = decode_token(token, settings, expected_type=ADMIN_TOKEN_TYPE)
             admin_id = claims.get("sub")
             if admin_id:
                 return f"{group}:admin:{admin_id}"
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     # Fall back to IP-based key

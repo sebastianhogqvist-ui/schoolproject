@@ -22,7 +22,7 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 
 SQLITE_FOREIGN_KEYS_PRAGMA = "PRAGMA foreign_keys=ON"
 SQLITE_JOURNAL_PRAGMA = "PRAGMA journal_mode=WAL"
@@ -37,7 +37,7 @@ class Base(DeclarativeBase):
     """Declarative base carrying the metadata that Alembic migrates."""
 
 
-def _build_engine(url: str, settings=None) -> Engine:
+def _build_engine(url: str, settings: Settings | None = None) -> Engine:
     """Create an engine for ``url``, tuned for SQLite where it matters.
 
     For non-SQLite databases, pool settings are read from settings if provided.
@@ -105,7 +105,9 @@ def _build_session_factory(bind: Engine) -> sessionmaker[Session]:
     )
 
 
-def _create_engine_and_session_factory(url: str, settings=None) -> tuple[Engine, sessionmaker[Session]]:
+def _create_engine_and_session_factory(
+    url: str, settings: Settings | None = None
+) -> tuple[Engine, sessionmaker[Session]]:
     """Create engine and session factory for a given URL and settings."""
     engine = _build_engine(url, settings)
     if url.startswith("sqlite"):
@@ -120,7 +122,7 @@ SessionLocal: sessionmaker[Session]
 engine, SessionLocal = _create_engine_and_session_factory(_initial_url)
 
 
-def configure_database(url: str, settings=None) -> None:
+def configure_database(url: str, settings: Settings | None = None) -> None:
     """Rebind the process engine and session factory to ``url``.
 
     Used by the test suite to give every test its own temporary database, and by

@@ -81,7 +81,8 @@ def create_monolith_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(licenses.router)
     app.include_router(sessions.router)
     app.include_router(admin.router)
-    app.include_router(keyauth.router)
+    if settings.KEYAUTH_ENABLED:
+        app.include_router(keyauth.router)
     app.include_router(integrity.router)
     app.include_router(security.router)
 
