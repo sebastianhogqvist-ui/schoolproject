@@ -15,14 +15,14 @@ server-side so the app secret never reaches the browser.
 ```
                   ┌─────────────────────────────────────────┐
                   │  NULLFORGE Loader  (Electron)          │
-                  │  roblox-external/loader/                 │
+                  │  nullforge/loader/                 │
                   │  main.js + nullforge-loader.html         │
                   └──────────────┬──────────────────────────┘
                                  │ license key + HWID
                                  ▼
                   ┌─────────────────────────────────────────┐
                   │  FastAPI Backend  (Python 3.13)         │
-                  │  roblox-external/server/                │
+                  │  nullforge/server/                │
                   │  • api/v1  — routers (licenses,           │
                   │                 sessions, keyauth,       │
                   │                 admin, health)           │
@@ -40,11 +40,11 @@ server-side so the app secret never reaches the browser.
                        └──────────────┘  └──────────────┘
 ```
 
-- **FastAPI backend** (`roblox-external/server/`) — the authoritative license
+- **FastAPI backend** (`nullforge/server/`) — the authoritative license
   server. It stores only HMAC-digested license keys and HWIDs (never plaintext),
   issues HS256 JWT session tokens, enforces per-IP rate limiting, and records
   anti-tamper events through a graduated enforcement engine.
-- **Electron loader** (`roblox-external/loader/`) — the desktop shell the end
+- **Electron loader** (`nullforge/loader/`) — the desktop shell the end
   user runs. It hosts the key-entry UI and talks to the server over HTTP.
 - **KeyAuth integration** — license validation is forwarded to the KeyAuth API
   server-side (`/v1/keyauth/*`) so the `KEYAUTH_APP_SECRET` never appears in a
@@ -85,7 +85,7 @@ schoolproject/
 ├── .env                        # runtime secrets (gitignored)
 ├── .env.example                # KeyAuth credentials template
 ├── README.md
-└── roblox-external/
+└── nullforge/
     ├── .env.example            # repo-level pointer to server/.env.example
     ├── server/                 # FastAPI backend (Python 3.13)
     │   ├── app/
@@ -146,9 +146,8 @@ schoolproject/
         └── build/              # packaging resources (icon, etc.)
 ```
 
-The repository also contains C++/user-mode components under `roblox-external/`
-(`um/`, `km/`, `build/`, `KernelBridge.sln`) that are out of scope for the current
-license-server/anti-tamper work.
+The repository also contains C++/user-mode components under `nullforge/` (`um/license/`)
+that are out of scope for the current license-server/anti-tamper work.
 
 ## Setup
 
@@ -156,7 +155,7 @@ Requirements: Python 3.13+, Node.js 20+ (for the Electron loader).
 
 ```bash
 # 1. Backend
-cd roblox-external/server
+cd nullforge/server
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -187,7 +186,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 ```bash
 # Loader (separate terminal)
-cd roblox-external/loader
+cd nullforge/loader
 npm install            # only needed once; installs electron + electron-builder
 npm start              # launches the NULLFORGE Loader window
 ```
@@ -195,7 +194,7 @@ npm start              # launches the NULLFORGE Loader window
 ### Configuration reference
 
 All server options are read from environment variables; see
-`roblox-external/server/.env.example` for the full documented list. Key toggles:
+`nullforge/server/.env.example` for the full documented list. Key toggles:
 
 | Variable | Default | Notes |
 |---|---|---|

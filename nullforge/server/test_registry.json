@@ -1,0 +1,9 @@
+{
+  "test": {
+    "host": "127.0.0.1",
+    "name": "test",
+    "port": 18000,
+    "registered_at": "2026-11-13T09:25:10+00:00",
+    "ttl_seconds": 300
+  }
+}

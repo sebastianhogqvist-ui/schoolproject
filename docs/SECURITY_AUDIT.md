@@ -1,7 +1,7 @@
 # Security Audit Report
 
 **Audit Date:** 2026-10-23
-**Scope:** NULLFORGE license server (`roblox-external/server/`), Electron loader (`roblox-external/loader/`)
+**Scope:** NULLFORGE license server (`nullforge/server/`), Electron loader (`nullforge/loader/`)
 **Methodology:** Adversarial code review — line-by-line inspection for exploitable vulnerabilities
 
 ## Previously Fixed Vulnerabilities (Commit 6d0b78d / 2f6ba67)

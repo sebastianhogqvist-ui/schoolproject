@@ -1,0 +1,30 @@
+{
+  "integrity": {
+    "host": "127.0.0.1",
+    "name": "integrity",
+    "port": 21954,
+    "registered_at": "2026-11-13T09:26:58+00:00",
+    "ttl_seconds": 600
+  },
+  "license": {
+    "host": "127.0.0.1",
+    "name": "license",
+    "port": 18437,
+    "registered_at": "2026-11-13T09:26:58+00:00",
+    "ttl_seconds": 600
+  },
+  "security": {
+    "host": "127.0.0.1",
+    "name": "security",
+    "port": 20327,
+    "registered_at": "2026-11-13T09:26:57+00:00",
+    "ttl_seconds": 600
+  },
+  "session": {
+    "host": "127.0.0.1",
+    "name": "session",
+    "port": 19109,
+    "registered_at": "2026-11-13T09:26:58+00:00",
+    "ttl_seconds": 600
+  }
+}
