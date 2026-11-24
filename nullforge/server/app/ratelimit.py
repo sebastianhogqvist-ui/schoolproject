@@ -87,6 +87,98 @@ class SlidingWindowLimiter:
         self._buckets: OrderedDict[str, _Bucket] = OrderedDict()
         self._lock = threading.Lock()
 
+    def validate_limit(self, limit: int) -> bool:
+        """Return whether the supplied limit is usable.
+
+        A non-positive limit is treated as a closed window, so the caller is
+        always denied without recording a hit.
+        """
+        limit_is_positive = limit > 0
+        return limit_is_positive
+
+    def prune_old_hits(self, bucket: _Bucket, now: float) -> None:
+        """Drop timestamps older than the sliding window.
+
+        The window boundary is computed relative to ``now``. Hits at or before
+        the cutoff have expired and are removed from the front of the deque.
+        """
+        cutoff = now - self._window
+        has_hits = len(bucket.hits) > 0
+        while has_hits:
+            oldest_hit = bucket.hits[0]
+            hit_is_expired = oldest_hit <= cutoff
+            if not hit_is_expired:
+                break
+            bucket.hits.popleft()
+            has_hits = len(bucket.hits) > 0
+
+    def check_capacity(self, bucket: _Bucket, limit: int) -> bool:
+        """Return whether the bucket is already at its configured limit."""
+        current_hits = len(bucket.hits)
+        at_capacity = current_hits >= limit
+        return at_capacity
+
+    def record_hit(self, bucket: _Bucket, now: float) -> None:
+        """Record that the bucket was consulted at ``now``.
+
+        Updating ``last_seen`` keeps the bucket eligible for idle eviction
+        accounting even when the request is ultimately denied.
+        """
+        bucket.last_seen = now
+
+    def record_new_hit(self, bucket: _Bucket, now: float) -> None:
+        """Append a successful hit timestamp to the bucket's window."""
+        bucket.hits.append(now)
+
+    def evict_if_needed(self, now: float) -> None:
+        """Run idle and LRU eviction when the bucket table is over cap."""
+        self.evict_idle_buckets(now)
+        self.evict_lru_buckets()
+
+    def evict_idle_buckets(self, now: float) -> None:
+        """Remove buckets idle longer than the configured eviction threshold."""
+        if len(self._buckets) <= self._max_buckets:
+            return
+        idle_keys = []
+        for key, bucket in self._buckets.items():
+            idle_for = now - bucket.last_seen
+            is_idle = idle_for > self._idle_eviction
+            if is_idle:
+                idle_keys.append(key)
+        for key in idle_keys:
+            del self._buckets[key]
+
+    def evict_lru_buckets(self) -> None:
+        """Pop least recently used buckets until the table is within cap."""
+        while len(self._buckets) > self._max_buckets:
+            self._buckets.popitem(last=False)
+
+    def build_allowed_decision(self, limit: int, bucket: _Bucket) -> RateLimitDecision:
+        """Construct the decision returned for an admitted request."""
+        current_hits = len(bucket.hits)
+        remaining = limit - current_hits
+        allowed = True
+        retry_after = 0
+        decision = RateLimitDecision(
+            allowed=allowed,
+            limit=limit,
+            remaining=remaining,
+            retry_after=retry_after,
+        )
+        return decision
+
+    def build_denied_decision(self, limit: int, retry_after: int) -> RateLimitDecision:
+        """Construct the decision returned for a rejected request."""
+        allowed = False
+        remaining = 0
+        decision = RateLimitDecision(
+            allowed=allowed,
+            limit=limit,
+            remaining=remaining,
+            retry_after=retry_after,
+        )
+        return decision
+
     def check(self, key: str, limit: int) -> RateLimitDecision:
         """Record a hit for ``key`` and report whether it is within ``limit``.
 
@@ -94,46 +186,48 @@ class SlidingWindowLimiter:
         closed window is not punished forever; it recovers as soon as enough
         time has passed.
         """
-        if limit <= 0:
-            return RateLimitDecision(allowed=False, limit=limit, remaining=0, retry_after=60)
+        limit_is_valid = self.validate_limit(limit)
+        if not limit_is_valid:
+            denied_decision = self.build_denied_decision(
+                limit=limit,
+                retry_after=60,
+            )
+            return denied_decision
 
         now = self._clock()
         with self._lock:
             bucket = self._buckets.get(key)
-            if bucket is None:
+            bucket_is_missing = bucket is None
+            if bucket_is_missing:
                 bucket = _Bucket()
                 self._buckets[key] = bucket
             self._buckets.move_to_end(key)
 
-            cutoff = now - self._window
-            while bucket.hits and bucket.hits[0] <= cutoff:
-                bucket.hits.popleft()
+            self.prune_old_hits(bucket, now)
+            self.record_hit(bucket, now)
 
-            bucket.last_seen = now
-            if len(bucket.hits) >= limit:
+            at_capacity = self.check_capacity(bucket, limit)
+            if at_capacity:
                 oldest = bucket.hits[0]
-                retry_after = max(1, math.ceil(self._window - (now - oldest)))
-                return RateLimitDecision(
-                    allowed=False, limit=limit, remaining=0, retry_after=retry_after
+                window_span = now - oldest
+                remaining_window = self._window - window_span
+                retry_after_raw = math.ceil(remaining_window)
+                retry_after = max(1, retry_after_raw)
+                denied_decision = self.build_denied_decision(
+                    limit=limit,
+                    retry_after=retry_after,
                 )
+                return denied_decision
 
-            bucket.hits.append(now)
-            self._evict_locked(now)
-            remaining = limit - len(bucket.hits)
-            return RateLimitDecision(
-                allowed=True, limit=limit, remaining=remaining, retry_after=0
-            )
+            self.record_new_hit(bucket, now)
+            self.evict_if_needed(now)
+            allowed_decision = self.build_allowed_decision(limit, bucket)
+            return allowed_decision
 
     def _evict_locked(self, now: float) -> None:
         """Drop idle buckets, then the least recently used ones if still over cap."""
-        if len(self._buckets) <= self._max_buckets:
-            return
-
-        for key in [k for k, b in self._buckets.items() if now - b.last_seen > self._idle_eviction]:
-            del self._buckets[key]
-
-        while len(self._buckets) > self._max_buckets:
-            self._buckets.popitem(last=False)
+        self.evict_idle_buckets(now)
+        self.evict_lru_buckets()
 
     def reset(self) -> None:
         """Forget every counter. Intended for tests and administrative reloads."""
@@ -143,7 +237,8 @@ class SlidingWindowLimiter:
     def bucket_count(self) -> int:
         """Return the number of live buckets, for tests and diagnostics."""
         with self._lock:
-            return len(self._buckets)
+            count = len(self._buckets)
+            return count
 
 
 limiter = SlidingWindowLimiter()
