@@ -1,7 +1,7 @@
 services:
   license-server:
     build: .
-    image: roblox-license-server:latest
+    image: nullforge-license-server:latest
     ports:
       - "8080:8080"
     env_file:

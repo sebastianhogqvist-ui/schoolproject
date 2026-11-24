@@ -60,7 +60,7 @@ def create_monolith_app(settings: Settings | None = None) -> FastAPI:
     configure_database(settings.DATABASE_URL)
 
     app = FastAPI(
-        title="roblox-license-server",
+        title="nullforge-license-server",
         version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",

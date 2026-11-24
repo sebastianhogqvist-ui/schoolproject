@@ -1,4 +1,4 @@
-# roblox-license-server
+# nullforge-license-server
 
 HWID-bound license/key server for the KernelBridge client. A FastAPI service
 that mints license keys, binds them to a device (HWID), issues short-lived

@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ENV DATABASE_URL=sqlite:///./license.db \
-    SERVER_HOST=0.0.0.0 \
+    SERVER_HOST=127.0.0.1 \
     SERVER_PORT=8080
 
 EXPOSE 8080
